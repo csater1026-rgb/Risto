@@ -1,0 +1,37 @@
+{
+  "name": "risto",
+  "version": "0.1.0",
+  "description": "Client-side prediction, server reconciliation, and entity interpolation for real-time browser games — a small, dependency-free netcode engine.",
+  "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node build.js",
+    "prepare": "node build.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "keywords": [
+    "netcode",
+    "multiplayer",
+    "prediction",
+    "reconciliation",
+    "interpolation",
+    "game",
+    "webrtc",
+    "realtime"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.21.0",
+    "playwright": "^1.63.0"
+  }
+}
