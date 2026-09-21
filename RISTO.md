@@ -89,6 +89,11 @@ too. Never mix in `performance.now()`. Out-of-order pushes are dropped.
 **`CorrectionSmoother`** — Valve-style error carry. Simulation snaps;
 pixels ease. Distances ≥ `snapDistance` (round resets) snap.
 
+**`ShadowBody`** — last authoritative pose for the local player. Not a
+debug overlay: Duel renders it and knockouts are decided on it. Push
+from each host snapshot; `ShadowBody.gap(predicted, shadow)` is how far
+the player has run ahead of the world.
+
 **`simulate(state, inputs, dt) => newState`** — game rules, **pure**.
 A missing key in `inputs` means "this body is unknown this tick: freeze
 it." A present `{dx:0,dy:0}` means "standing still." That distinction
@@ -98,7 +103,17 @@ is how client prediction avoids hallucinating the opponent.
 
 ## Duel
 
-Two discs in a ring. Arrow keys / WASD. Knock the other out.
+Two discs in a ring. Arrow keys / WASD, Space to dash. Knock the other
+out. Unique physics: a **ring current** always drifts bodies, a **dash**
+may overspeed, and a hard **lip-seeking clash** throws the outer disc
+toward the rim.
+
+- You are p1. A deterministic host-side bot is p2 (real inputs, including
+  dashes, into the sim). Collision, clash, and knock-out live in
+  `simulate`, so they reconcile.
+- The hollow disc on the Risto lane is `ShadowBody` — where the host
+  thinks you are. Toggle with the Shadow chip. Naive has no split
+  (you *are* the delayed body).
 
 - You are p1. A deterministic host-side bot is p2 (real inputs into the
   sim, not a scripted overlay). Collision and knock-out live in
@@ -165,3 +180,4 @@ later, label it experimental and keep loopback one click away.
   makes dropped packets feel like a key release.
 - Don't mix clocks on the interpolator.
 - Don't invent opponent input on the client.
+- Don't demote `ShadowBody` to a debug flag. It is the product.

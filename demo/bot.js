@@ -5,9 +5,9 @@ import { RING } from './simulate.js';
  * with identical host inputs produce the same opponent — the split you
  * see is the netcode, not a different fight.
  *
- * Orbits first so interpolation has motion and the player can feel
- * prediction. Short charge windows later, aimed through the player
- * toward the nearest lip.
+ * Orbits with the ring current, then dashes through the player toward
+ * the lip. The dash is the same input the human uses, so it predicts
+ * and reconciles like any other player.
  */
 export function thinkBot(state) {
   const me = state.p2;
@@ -25,6 +25,7 @@ export function thinkBot(state) {
 
   const cycle = t % 5.5;
   const charge = t > 2.2 && cycle > 4.15 && cycle < 4.85;
+  const dash = charge && dist < 110 && cycle > 4.35 && cycle < 4.55 && (me.dashCd ?? 0) <= 0;
 
   let tx;
   let ty;
@@ -39,5 +40,5 @@ export function thinkBot(state) {
   }
 
   const mag = Math.hypot(tx, ty) || 1;
-  return { dx: tx / mag, dy: ty / mag };
+  return { dx: tx / mag, dy: ty / mag, dash };
 }

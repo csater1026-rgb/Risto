@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { simulate, createInitialState, RING, RADIUS, isOut } from '../demo/simulate.js';
+import { simulate, createInitialState, RING, RADIUS, isOut, DASH_COOLDOWN_MS, CLASH_SPEED } from '../demo/simulate.js';
 
 test('held input moves p1 and leaves a frozen p2 still', () => {
   const start = createInitialState();
@@ -59,4 +59,34 @@ test('ko timer resets bodies into countdown, then play', () => {
   assert.equal(state.p1.x, RING.cx - 72);
   state = simulate(state, {}, 750);
   assert.equal(state.phase, 'play');
+});
+
+test('ring current drifts a standing body even with zero stick', () => {
+  const start = createInitialState();
+  start.phase = 'play';
+  start.p1 = { x: RING.cx + 80, y: RING.cy, vx: 0, vy: 0, dashCd: 0 };
+  const next = simulate(start, { p1: { dx: 0, dy: 0 } }, 200);
+  assert.ok(Math.abs(next.p1.y - start.p1.y) > 1, 'current should rotate the body');
+});
+
+test('dash spends the cooldown and overspeeds', () => {
+  const start = createInitialState();
+  start.phase = 'play';
+  const dashed = simulate(start, { p1: { dx: 1, dy: 0, dash: true } }, 16);
+  const walked = simulate(start, { p1: { dx: 1, dy: 0, dash: false } }, 16);
+  assert.ok(dashed.p1.vx > walked.p1.vx + 200);
+  assert.ok(dashed.p1.dashCd > DASH_COOLDOWN_MS - 20);
+  const again = simulate(dashed, { p1: { dx: 1, dy: 0, dash: true } }, 16);
+  assert.ok(again.p1.dashCd < dashed.p1.dashCd);
+  assert.ok(again.p1.dashCd > 0, 'cooldown should still be ticking');
+});
+
+test('a hard clash near the lip kicks the outer disc outward', () => {
+  const start = createInitialState();
+  start.phase = 'play';
+  start.p1 = { x: RING.cx + 110, y: RING.cy, vx: 280, vy: 0, dashCd: 0 };
+  start.p2 = { x: RING.cx + 140, y: RING.cy, vx: -40, vy: 0, dashCd: 0 };
+  const next = simulate(start, { p1: { dx: 0, dy: 0 }, p2: { dx: 0, dy: 0 } }, 16);
+  assert.ok(next.clash > CLASH_SPEED, `expected a clash, got ${next.clash}`);
+  assert.ok(next.p2.vx > 50, 'outer disc should be thrown toward the rim');
 });

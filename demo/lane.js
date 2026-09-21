@@ -3,6 +3,7 @@ import {
   PredictionClient,
   RemoteInterpolator,
   CorrectionSmoother,
+  ShadowBody,
   createLoopbackLink,
 } from '../src/index.js';
 import { simulate, createInitialState } from './simulate.js';
@@ -26,6 +27,7 @@ export class Lane {
     });
     this.link = createLoopbackLink();
     this.smoother = new CorrectionSmoother();
+    this.shadow = new ShadowBody();
     this._botSeq = 0;
     this._nextSeq = 0;
     this._hostAccumulator = 0;
@@ -51,6 +53,7 @@ export class Lane {
         const prev = this.client.getState().p1;
         this.client.reconcile(snapshot);
         this.smoother.note(prev, this.client.getState().p1);
+        this.shadow.push(snapshot.state.p1, snapshot.timestamp);
         this.remoteP2.push(snapshot.state.p2, snapshot.timestamp);
         if (snapshot.state.phase !== 'play') this.smoother.reset();
       } else {
@@ -106,7 +109,14 @@ export class Lane {
       const clientState = this.client.getState();
       const p1 = this.smoother.apply(clientState.p1, dtSeconds);
       const p2 = this.remoteP2.sample(now, lerpBody) ?? clientState.p2;
-      return { ...clientState, p1, p2 };
+      const shadow = this.shadow.sample();
+      return {
+        ...clientState,
+        p1,
+        p2,
+        shadow,
+        shadowGap: ShadowBody.gap(p1, shadow),
+      };
     }
     return this.naiveState;
   }
@@ -126,5 +136,6 @@ function lerpBody(a, b, t) {
     y: a.y + (b.y - a.y) * t,
     vx: a.vx + (b.vx - a.vx) * t,
     vy: a.vy + (b.vy - a.vy) * t,
+    dashCd: (a.dashCd ?? 0) + ((b.dashCd ?? 0) - (a.dashCd ?? 0)) * t,
   };
 }

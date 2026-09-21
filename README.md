@@ -24,6 +24,11 @@ reusable, tested version of that theory.
   the same game two ways side by side under identical injected latency and
   packet loss — naive networking vs. Risto — so the difference (and the
   reason for it) is visible, not just claimed.
+- **Shadow Body is the differentiator.** Other stacks hide the split
+  between your predicted pixels and the server's pose. Risto exposes it
+  as a first-class object you can render and design around. In Duel, the
+  hollow disc is where knockouts are actually decided — high ping becomes
+  a skill, not just a bug.
 
 ## Install
 
@@ -121,7 +126,9 @@ of the netcode logic above it.
 `demo/` is **Duel**: two discs, one ring, knock the other out. Open
 `demo/index.html` via any static server (no bundler). Compare mode runs
 the same fight twice under identical injected lag — naive networking on
-the left, Risto on the right. Play mode is the predicted lane full-width.
+the left, Risto on the right, with your **Shadow Body** drawn as a hollow
+disc. Space dashes. A hard clash near the lip throws the outer disc out.
+Play mode is the predicted lane full-width.
 
 The page uses loopback transport on purpose. Real WebRTC is implemented
 (`WebRtcTransport` + `api/signal.js`) but is a stretch goal; NAT

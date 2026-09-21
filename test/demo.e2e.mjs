@@ -57,6 +57,8 @@ async function main() {
       naiveX: naive.p1.x,
       ristoX: risto.p1.x,
       phase: risto.phase,
+      shadowGap: risto.shadowGap ?? 0,
+      hasShadow: Boolean(risto.shadow),
     };
   });
   await page.keyboard.up('ArrowRight');
@@ -73,6 +75,11 @@ async function main() {
   assert(
     lead.ristoX > lead.naiveX + 8,
     `expected predicted p1 to lead naive p1 under 350ms latency; naive=${lead.naiveX.toFixed(1)} risto=${lead.ristoX.toFixed(1)}`
+  );
+  assert(lead.hasShadow, 'expected Risto lane to expose a Shadow Body from the last host snapshot');
+  assert(
+    lead.shadowGap > 4,
+    `expected predicted disc to run ahead of the host shadow under 350ms latency, gap=${lead.shadowGap}`
   );
 
   // 4. Drop latency/loss back to near zero and confirm the backlog actually

@@ -16,6 +16,8 @@ flake on camera.
   make the main demo depend on real WebRTC or a signaling server.
 - `simulate(state, inputs, dt)` must stay **pure**. Prediction and
   reconciliation replay it.
+- `ShadowBody` is a first-class mechanic (where the host thinks you
+  are), not a debug overlay. Don't hide it by default in the demo.
 - Transports share one shape: `send(message)` / `onReceive(handler)`.
   New transports implement that; they do not fork the sim.
 - `demo/` is a self-contained page. No bundler required to open it

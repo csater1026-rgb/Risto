@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Risto — Duel. Hide the lag.</title>
+<title>Risto — Duel. Play the split.</title>
 <style>
   :root{
     --bg:#07090c;
@@ -59,7 +59,7 @@
     appearance:none;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-dim);
     padding:5px 10px;border-radius:999px;font-size:12px;cursor:pointer;font-weight:600;
   }
-  .presets button.on{border-color:var(--you);color:var(--you);background:rgba(90,167,255,.08)}
+  .presets button.on, .chip.on{border-color:var(--you);color:var(--you);background:rgba(90,167,255,.08)}
 
   .sliders{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
   .sliders label{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--ink-faint);letter-spacing:.04em}
@@ -102,7 +102,7 @@
   .keys kbd.hot{border-color:var(--you);color:var(--you);background:rgba(90,167,255,.1)}
 
   .explain{
-    display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px;
+    display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:22px;
   }
   @media(max-width:800px){ .explain{grid-template-columns:1fr} }
   .explain article{
@@ -158,12 +158,13 @@
   </header>
 
   <section class="hero">
-    <h2>Hide the lag. Keep the fight.</h2>
+    <h2>Hide the lag. Play the split.</h2>
     <p>
-      Client-side prediction, server reconciliation, and entity interpolation —
-      the same tricks competitive games use — as a small, dependency-free JS
-      library. Duel is the proof: two discs, one ring, knock the other out.
-      The left lane waits on the host. The right lane doesn't.
+      Other engines hide the gap between your pixels and the server.
+      Risto makes that gap a mechanic: the hollow disc is your
+      <strong>Shadow Body</strong> — where the host thinks you are, and
+      where knockouts are actually decided. Dash (Space) to clash.
+      Time it when their shadow is near the lip.
     </p>
   </section>
 
@@ -178,6 +179,7 @@
       <button type="button" data-l="150" data-j="30" data-s="5" class="on">4G</button>
       <button type="button" data-l="280" data-j="70" data-s="12">Bad</button>
     </div>
+    <button type="button" class="chip on" id="toggleShadow">Shadow</button>
     <div class="sliders">
       <label>Latency
         <input id="latency" type="range" min="0" max="400" value="150" step="10" />
@@ -197,9 +199,10 @@
       <kbd data-k="arrowup">↑</kbd>
       <kbd data-k="arrowdown">↓</kbd>
       <kbd data-k="arrowright">→</kbd>
+      <kbd data-k=" ">Space</kbd>
     </div>
   </div>
-  <p class="hint" id="hint">Arrow keys or WASD — the same input drives both lanes, through the same fake network. Loopback, not WebRTC: this take will work.</p>
+  <p class="hint" id="hint">WASD/arrows to move, Space to dash. Same input, same fake network. The hollow disc is your shadow — the world hits that, not your pixels.</p>
 
   <div class="lanes">
     <div class="lane naive">
@@ -213,7 +216,7 @@
     <div class="lane predictive">
       <header class="lh">
         <h3>Risto</h3>
-        <p class="sub">Predicts you instantly. Smooths the bot. Corrects without a pop.</p>
+        <p class="sub">Predicts you instantly. The hollow disc is where the host still thinks you are.</p>
       </header>
       <canvas id="canvasRisto" width="560" height="400"></canvas>
       <div class="stat" id="statRisto">—</div>
@@ -224,7 +227,7 @@
     <div class="lane predictive">
       <header class="lh">
         <h3>Duel</h3>
-        <p class="sub">You vs the bot. Knock them out of the ring.</p>
+        <p class="sub">Play the shadow. Dash into a clash near the lip to throw them out.</p>
       </header>
       <canvas id="canvasPlay" width="560" height="400"></canvas>
       <div class="stat" id="statPlay">—</div>
@@ -243,6 +246,10 @@
     <article>
       <h3>3. Interpolate everyone else</h3>
       <p>You can't predict the bot's next input, so Risto renders it slightly in the past and blends between snapshots. Motion stays smooth under jitter and loss.</p>
+    </article>
+    <article>
+      <h3>4. Shadow Body</h3>
+      <p>The predicted disc is what you feel. The hollow disc is what the world hits. Other libraries hide that split. Risto puts it on the field — high ping is a skill, not just a slider.</p>
     </article>
   </section>
 
@@ -303,7 +310,13 @@
 
   const PRO_KEY = 'risto.pro';
   let pro = localStorage.getItem(PRO_KEY) === '1';
+  let showShadow = true;
   syncProButton();
+
+  document.getElementById('toggleShadow').addEventListener('click', () => {
+    showShadow = !showShadow;
+    document.getElementById('toggleShadow').classList.toggle('on', showShadow);
+  });
 
   function conditions() {
     return {
@@ -348,15 +361,17 @@
     document.getElementById('modePlay').classList.toggle('on', mode === 'play');
     document.getElementById('hint').textContent =
       mode === 'play'
-        ? 'Arrow keys or WASD to move. Shove the pink disc out of the ring.'
-        : 'Arrow keys or WASD — the same input drives both lanes, through the same fake network. Loopback, not WebRTC: this take will work.';
+        ? 'WASD/arrows to move, Space to dash. The hollow disc is your shadow — knockouts are decided there.'
+        : 'WASD/arrows to move, Space to dash. Same input, same fake network. The hollow disc is your shadow — the world hits that, not your pixels.';
   }
 
+  let dashHold = 0;
   const keys = new Set();
   function keyName(e) { return e.key.toLowerCase(); }
   window.addEventListener('keydown', (e) => {
     const k = keyName(e);
     if (['arrowleft','arrowright','arrowup','arrowdown',' '].includes(k)) e.preventDefault();
+    if (k === ' ' && !e.repeat) dashHold = 90;
     keys.add(k);
     highlightKeys();
   });
@@ -380,13 +395,14 @@
       const n = Math.SQRT1_2;
       dx *= n; dy *= n;
     }
-    return { dx, dy };
+    return { dx, dy, dash: dashHold > 0 };
   }
 
   let lastTime = performance.now();
   function frame(now) {
     const dt = Math.min(50, now - lastTime);
     lastTime = now;
+    if (dashHold > 0) dashHold = Math.max(0, dashHold - dt);
     const input = readInput();
     const c = conditions();
     // One roll per direction per frame, shared by both lanes.
@@ -400,17 +416,18 @@
     const naiveState = laneNaive.getRenderState(wallClockNow, dtSeconds);
     const ristoState = laneRisto.getRenderState(wallClockNow, dtSeconds);
 
-    drawNaive.draw(naiveState, { now, pro });
-    drawRisto.draw(ristoState, { now, pro });
+    drawNaive.draw(naiveState, { now, pro, showShadow: false });
+    drawRisto.draw(ristoState, { now, pro, showShadow });
     if (document.body.classList.contains('mode-play')) {
-      drawPlay.draw(ristoState, { now, pro });
+      drawPlay.draw(ristoState, { now, pro, showShadow });
     }
 
     const rtt = c.latencyMs * 2;
     statNaive.textContent = `no local prediction · ~${rtt} ms before you move`;
     const pending = laneRisto.pendingInputCount;
     const interp = Math.round(laneRisto.interpolationDelayMs);
-    const ristoLine = `${pending} input(s) awaiting host ack · interp ${interp} ms`;
+    const gap = ristoState.shadowGap ? Math.round(ristoState.shadowGap) : 0;
+    const ristoLine = `${pending} input(s) awaiting host ack · interp ${interp} ms · shadow ${gap} px`;
     statRisto.textContent = ristoLine;
     statPlay.textContent = ristoLine;
 

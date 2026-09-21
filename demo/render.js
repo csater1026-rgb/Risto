@@ -4,6 +4,7 @@ const YOU = '#5aa7ff';
 const BOT = '#ff5d7a';
 const YOU_GLOW = 'rgba(90, 167, 255, 0.55)';
 const BOT_GLOW = 'rgba(255, 93, 122, 0.5)';
+const SHADOW = 'rgba(180, 220, 255, 0.9)';
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
@@ -12,13 +13,15 @@ export function createRenderer(canvas) {
   let flash = 0;
   let lastHit = 0;
   let lastKo = null;
+  let clashRing = 0;
 
   return {
-    draw(state, { now, pro = false, labels = true } = {}) {
+    draw(state, { now, pro = false, labels = true, showShadow = true } = {}) {
       if (!state) return;
       if (state.hit && state.t !== lastHit) {
-        shake = 7;
-        flash = 1;
+        shake = state.clash ? 12 : 7;
+        flash = state.clash ? 1 : 0.7;
+        clashRing = state.clash ? 1 : 0;
         lastHit = state.t;
       }
       if (state.phase === 'ko' && state.lastKo && state.lastKo !== lastKo) {
@@ -35,6 +38,7 @@ export function createRenderer(canvas) {
       shake *= 0.82;
       if (shake < 0.2) shake = 0;
       flash *= 0.88;
+      clashRing *= 0.9;
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, ARENA.width, ARENA.height);
@@ -42,18 +46,26 @@ export function createRenderer(canvas) {
 
       drawBackdrop(ctx, pro);
       drawRing(ctx, state, pro);
+      drawCurrent(ctx, state.t);
+      if (showShadow && state.shadow) {
+        drawLink(ctx, state.p1, state.shadow);
+        drawShadow(ctx, state.shadow);
+      }
       drawTrails(ctx, trails.p1, YOU);
       drawTrails(ctx, trails.p2, BOT);
       drawPlayer(ctx, state.p2, BOT, BOT_GLOW, isOut(state.p2));
-      drawPlayer(ctx, state.p1, YOU, YOU_GLOW, isOut(state.p1));
+      drawPlayer(ctx, state.p1, YOU, YOU_GLOW, isOut(state.p1), state.p1.dashCd > 500);
+      if (clashRing > 0.08 && state.p1 && state.p2) {
+        drawClash(ctx, state.p1, state.p2, clashRing);
+      }
       if (labels) {
         drawTag(ctx, state.p1, 'YOU', YOU);
         drawTag(ctx, state.p2, 'BOT', BOT);
       }
-      drawHud(ctx, state);
+      drawHud(ctx, state, showShadow);
       drawBanner(ctx, state, now);
       if (flash > 0.05) {
-        ctx.fillStyle = `rgba(255, 230, 200, ${0.07 * flash})`;
+        ctx.fillStyle = `rgba(255, 230, 200, ${0.08 * flash})`;
         ctx.fillRect(0, 0, ARENA.width, ARENA.height);
       }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -63,6 +75,7 @@ export function createRenderer(canvas) {
       trails.p2.length = 0;
       shake = 0;
       flash = 0;
+      clashRing = 0;
     },
   };
 }
@@ -109,11 +122,70 @@ function drawRing(ctx, state, pro) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Center mark
   ctx.beginPath();
   ctx.arc(RING.cx, RING.cy, 3, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(170, 196, 220, 0.35)';
   ctx.fill();
+  ctx.restore();
+}
+
+function drawCurrent(ctx, t) {
+  ctx.save();
+  ctx.translate(RING.cx, RING.cy);
+  ctx.rotate((t || 0) / 1400);
+  ctx.strokeStyle = 'rgba(90, 167, 255, 0.16)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * (RING.r - 22), Math.sin(a) * (RING.r - 22));
+    ctx.lineTo(Math.cos(a) * (RING.r - 14), Math.sin(a) * (RING.r - 14));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawLink(ctx, a, b) {
+  const dist = Math.hypot(a.x - b.x, a.y - b.y);
+  if (dist < 6) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.strokeStyle = 'rgba(180, 220, 255, 0.28)';
+  ctx.setLineDash([3, 5]);
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawShadow(ctx, p) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, RADIUS, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(180, 220, 255, 0.07)';
+  ctx.fill();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = SHADOW;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = '700 9px ui-sans-serif, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(180, 220, 255, 0.75)';
+  ctx.fillText('SHADOW', p.x, p.y + RADIUS + 11);
+  ctx.restore();
+}
+
+function drawClash(ctx, a, b, amount) {
+  const x = (a.x + b.x) / 2;
+  const y = (a.y + b.y) / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 18 + (1 - amount) * 36, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255, 210, 140, ${0.55 * amount})`;
+  ctx.lineWidth = 3;
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -129,12 +201,12 @@ function drawTrails(ctx, trail, color) {
   ctx.globalAlpha = 1;
 }
 
-function drawPlayer(ctx, p, color, glow, out) {
+function drawPlayer(ctx, p, color, glow, out, dashing = false) {
   ctx.save();
   ctx.globalAlpha = out ? 0.45 : 1;
   ctx.beginPath();
-  ctx.arc(p.x, p.y, RADIUS + 4, 0, Math.PI * 2);
-  ctx.fillStyle = glow;
+  ctx.arc(p.x, p.y, RADIUS + (dashing ? 8 : 4), 0, Math.PI * 2);
+  ctx.fillStyle = dashing ? 'rgba(255,255,255,0.35)' : glow;
   ctx.filter = 'blur(4px)';
   ctx.fill();
   ctx.filter = 'none';
@@ -151,8 +223,8 @@ function drawPlayer(ctx, p, color, glow, out) {
 
   ctx.beginPath();
   ctx.arc(p.x, p.y, RADIUS, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = dashing ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = dashing ? 3 : 2;
   ctx.stroke();
   ctx.restore();
 }
@@ -164,7 +236,7 @@ function drawTag(ctx, p, text, color) {
   ctx.fillText(text, p.x, p.y - RADIUS - 8);
 }
 
-function drawHud(ctx, state) {
+function drawHud(ctx, state, showShadow) {
   ctx.font = '700 18px ui-sans-serif, system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.fillStyle = YOU;
@@ -177,6 +249,12 @@ function drawHud(ctx, state) {
   ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
   ctx.fillStyle = 'rgba(180, 196, 214, 0.7)';
   ctx.fillText(`ROUND ${state.round}`, RING.cx, 26);
+
+  if (showShadow && state.shadowGap > 4) {
+    ctx.font = '600 10px ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(180, 220, 255, 0.7)';
+    ctx.fillText(`shadow ${Math.round(state.shadowGap)} px ahead of the host`, RING.cx, ARENA.height - 12);
+  }
 }
 
 function drawBanner(ctx, state, now) {
@@ -194,7 +272,6 @@ function drawBanner(ctx, state, now) {
     banner(ctx, text, color);
     return;
   }
-  // Tiny pulse so a still frame still feels alive
   if (now) {
     ctx.globalAlpha = 0.04 + 0.04 * Math.sin(now / 400);
     ctx.beginPath();
