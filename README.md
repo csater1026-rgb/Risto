@@ -131,13 +131,35 @@ side-by-side comparison mode: the same interaction running with and
 without prediction/reconciliation/interpolation, sharing the same injected
 lag/packet-loss sliders, so you can watch the difference directly.
 
+It also has a **Pro** gate wired to real [RevenueCat Web
+Billing](https://www.revenuecat.com/docs/web/web-billing/overview)
+(`@revenuecat/purchases-js`) — unlocking one-click "Chaos Mode" network
+presets. To try it locally:
+
+1. `npm install && npm run build` (the demo imports the RevenueCat SDK by
+   bare specifier, which needs bundling — see `demo/billing.js`'s header
+   comment).
+2. `python3 -m http.server 8000` from the repo root, then open
+   `http://localhost:8000/demo/`.
+3. Without your own RevenueCat project configured, the Pro panel correctly
+   shows "Not configured" rather than crashing — that's the expected,
+   tested default state.
+4. To make purchases actually work: create a RevenueCat project, add an
+   Entitlement named `pro`, attach it to an Offering with at least one
+   web-enabled Product, then set `REVENUECAT_WEB_API_KEY` in
+   `demo/billing.js` to your project's Web Billing public API key and
+   rebuild.
+
 ## Development
 
 ```bash
 npm install
 npm test    # unit tests for InputHistory, PredictionClient, AuthoritativeHost,
             # RemoteInterpolator, NetworkLink — node:test, no extra deps
-npm run build   # produces dist/risto.esm.js and dist/risto.global.js
+npm run build   # produces dist/risto.esm.js, dist/risto.global.js, and
+                # demo/billing.bundle.js (the demo needs this to run)
+node test/demo.e2e.mjs   # headless Playwright check against a running
+                          # local server (see Demo section above)
 ```
 
 ## Design notes

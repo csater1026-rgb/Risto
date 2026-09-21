@@ -91,6 +91,31 @@ async function main() {
   await page.waitForTimeout(200); // let a few snapshots flow through first
   await assertSmoothInterpolation(page, 'under 60ms jitter');
 
+  // 6. RevenueCat billing, in its unconfigured state (the checked-in
+  // REVENUECAT_WEB_API_KEY is a placeholder) — must degrade to a clear,
+  // visible message rather than throwing or silently doing nothing. This
+  // is what CI and anyone cloning the repo without their own API key will
+  // actually see, so it's the state most worth locking in with a test.
+  const proStatus = page.locator('#proStatus');
+  await page.waitForTimeout(100); // let initBilling()'s check run
+  const initialStatus = await proStatus.textContent();
+  assert(
+    initialStatus.toLowerCase().includes('not configured'),
+    `expected the Pro panel to report unconfigured billing on load, got: "${initialStatus}"`
+  );
+
+  await page.locator('#unlockPro').click();
+  await page.waitForTimeout(100);
+  const clickedStatus = await proStatus.textContent();
+  assert(
+    clickedStatus.toLowerCase().includes('not configured'),
+    `expected clicking Unlock Pro to show the same clear message, not throw or do nothing, got: "${clickedStatus}"`
+  );
+  assert(
+    !(await page.locator('#chaosMode').isVisible()),
+    'Chaos Mode must stay hidden when billing is unconfigured — it should never be reachable without a real entitlement check'
+  );
+
   assert(errors.length === 0, `page threw errors: ${errors.join('\n')}`);
 
   await browser.close();

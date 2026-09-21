@@ -48,11 +48,18 @@
   }
   .pro h3{margin:0 0 4px; font-size:14px}
   .pro p{margin:0; color:var(--ink-dim); font-size:12.5px; max-width:520px}
+  .pro .status{margin-top:6px; font-size:12px}
+  .pro .status.err{color:var(--bad)}
+  .pro .status.ok{color:var(--good)}
+  .pro .actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
   button.btn{
     background:var(--accent); border:1px solid var(--accent); color:#0b1420;
     padding:9px 16px; border-radius:9px; cursor:pointer; font-weight:650; font-size:13.5px;
   }
-  button.btn:hover{filter:brightness(1.08)}
+  button.btn:hover:not(:disabled){filter:brightness(1.08)}
+  button.btn:disabled{opacity:.55; cursor:not-allowed}
+  button.btn.ghost{background:var(--panel-2); border-color:var(--line); color:var(--ink)}
+  [hidden]{display:none !important}
 </style>
 </head>
 <body>
@@ -100,9 +107,17 @@
   <div class="pro">
     <div>
       <h3>Pro</h3>
-      <p>More arenas, private rooms, and real WebRTC peer-to-peer play instead of the in-page loopback simulation.</p>
+      <p>
+        Unlocks one-click "Chaos Mode" network presets for stress-testing the
+        comparison, plus early access to more arenas, private rooms, and real
+        WebRTC peer-to-peer play as they ship.
+      </p>
+      <p class="status" id="proStatus"></p>
     </div>
-    <button class="btn" id="unlockPro">Unlock Pro</button>
+    <div class="actions">
+      <button class="btn ghost" id="chaosMode" hidden>Chaos Mode</button>
+      <button class="btn" id="unlockPro">Unlock Pro</button>
+    </div>
   </div>
 </main>
 
@@ -204,18 +219,74 @@
   }
   requestAnimationFrame(frame);
 
-  // --- RevenueCat Web Billing integration point -----------------------
-  // This is a documented stub, not a live purchase flow: wiring it up for
-  // real needs a RevenueCat project + public API key, which only exists
-  // once you've created one in your own RevenueCat dashboard. See
-  // https://www.revenuecat.com/docs/web/web-billing for the Web Billing
-  // SDK this would call (purchases-js), and swap this handler for a real
-  // `Purchases.configure(...)` + `purchase(...)` call once you have keys.
-  document.getElementById('unlockPro').addEventListener('click', () => {
-    alert(
-      'Pro checkout goes here — wire up RevenueCat Web Billing ' +
-      '(purchases-js) with your own project API key to make this live.'
-    );
+  // --- RevenueCat Web Billing ------------------------------------------
+  import { isBillingConfigured, checkProStatus, purchasePro } from './billing.bundle.js';
+
+  const proStatusEl = document.getElementById('proStatus');
+  const unlockProBtn = document.getElementById('unlockPro');
+  const chaosModeBtn = document.getElementById('chaosMode');
+
+  const CHAOS_PRESET = { latencyMs: 500, jitterMs: 150, lossRate: 0.35 };
+
+  function setProUnlocked(unlocked) {
+    unlockProBtn.hidden = unlocked;
+    chaosModeBtn.hidden = !unlocked;
+    if (unlocked) {
+      proStatusEl.textContent = '✓ Pro unlocked';
+      proStatusEl.className = 'status ok';
+    }
+  }
+
+  chaosModeBtn.addEventListener('click', () => {
+    latencyEl.value = CHAOS_PRESET.latencyMs;
+    jitterEl.value = CHAOS_PRESET.jitterMs;
+    lossEl.value = CHAOS_PRESET.lossRate * 100;
+    applyNetworkConditions();
+  });
+
+  async function initBilling() {
+    if (!isBillingConfigured()) {
+      proStatusEl.textContent =
+        'Not configured — set REVENUECAT_WEB_API_KEY in demo/billing.js to enable purchases.';
+      proStatusEl.className = 'status err';
+      return;
+    }
+    try {
+      const unlocked = await checkProStatus();
+      setProUnlocked(unlocked);
+    } catch (err) {
+      proStatusEl.textContent = `Couldn't check Pro status: ${err.message}`;
+      proStatusEl.className = 'status err';
+    }
+  }
+  initBilling();
+
+  unlockProBtn.addEventListener('click', async () => {
+    if (!isBillingConfigured()) {
+      proStatusEl.textContent =
+        'Not configured — set REVENUECAT_WEB_API_KEY in demo/billing.js to enable purchases.';
+      proStatusEl.className = 'status err';
+      return;
+    }
+    unlockProBtn.disabled = true;
+    proStatusEl.textContent = 'Opening checkout…';
+    proStatusEl.className = 'status';
+    try {
+      const result = await purchasePro();
+      if (result.cancelled) {
+        proStatusEl.textContent = '';
+      } else if (result.purchased) {
+        setProUnlocked(true);
+      } else {
+        proStatusEl.textContent = "Purchase completed, but Pro isn't active — check your entitlement setup.";
+        proStatusEl.className = 'status err';
+      }
+    } catch (err) {
+      proStatusEl.textContent = `Purchase failed: ${err.message}`;
+      proStatusEl.className = 'status err';
+    } finally {
+      unlockProBtn.disabled = false;
+    }
   });
 </script>
 </body>
