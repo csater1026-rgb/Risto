@@ -51,6 +51,23 @@ async function main() {
   await page.waitForTimeout(200); // let snapshots at the new latency start flowing
   await assertSmoothInterpolation(page, 'at 350ms latency');
 
+  // 2c. The explanation panel must actually reflect these settings, not
+  // just render once at page load — the whole point is that it's live.
+  // At this point latency=350, jitter is still the default 30.
+  const explainText = await page.locator('#explainStats').innerText();
+  assert(
+    explainText.includes('350 ms'),
+    `explanation panel didn't show the current latency (350ms): ${explainText}`
+  );
+  assert(
+    explainText.includes('700'), // round trip = 2 * 350
+    `explanation panel's round-trip math looks wrong, expected ~700ms: ${explainText}`
+  );
+  assert(
+    explainText.includes('480 ms'), // delayMs = latency(350) + jitter(30) + 2*HOST_TICK_MS(50) = 480
+    `explanation panel's interpolation delay figure looks wrong, expected 480ms: ${explainText}`
+  );
+
   // 3. Hold the right-arrow key and confirm local prediction is actually
   // running ahead of host acknowledgment (pendingInputCount > 0) while RTT
   // is high — this only happens if applyLocalInput() predicts immediately

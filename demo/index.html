@@ -42,6 +42,20 @@
   .lane.naive h2{color:var(--bad)}
   .lane.predictive h2{color:var(--good)}
 
+  .explain{
+    margin-top:16px; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:16px 18px;
+  }
+  .explain h3{margin:0 0 10px; font-size:14px}
+  .explain dl{display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin:0; font-size:13px}
+  .explain dt{color:var(--ink-dim)}
+  .explain dd{margin:0; font-family:var(--mono)}
+  .explain details{margin-top:14px; border-top:1px solid var(--line); padding-top:12px}
+  .explain summary{cursor:pointer; color:var(--accent); font-size:13px; font-weight:600}
+  .explain ol{margin:10px 0 0; padding-left:20px; font-size:13px; color:var(--ink-dim)}
+  .explain ol li{margin-bottom:9px}
+  .explain ol li b{color:var(--ink)}
+
   .pro{
     margin-top:20px; background:var(--panel); border:1px solid var(--line); border-radius:12px;
     padding:16px 18px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
@@ -104,6 +118,23 @@
     </div>
   </div>
 
+  <div class="explain">
+    <h3>What's happening right now</h3>
+    <dl id="explainStats"></dl>
+    <details>
+      <summary>Ways to push this further</summary>
+      <ol>
+        <li><b>Redundant input packets.</b> Risto currently sends just the latest input each tick. Sending the last 3–4 inputs in every packet (classic Source/Quake-style netcode) means a single dropped packet doesn't cause a stale "held" input — the next successful packet fills the gap retroactively instead of waiting a full tick for a fresh one.</li>
+        <li><b>Unreliable, unordered transport.</b> Real games run this over UDP-like channels — a WebRTC data channel configured <code>ordered:false, maxRetransmits:0</code> — instead of TCP-style reliable/ordered delivery, since retransmitting stale input is often worse than just dropping it and waiting for the next tick's fresh one.</li>
+        <li><b>Adaptive interpolation delay.</b> Instead of a fixed formula, measure actual round-trip time and jitter continuously (timestamped ping/pong) and retune <code>delayMs</code> live, so it's never larger than the connection actually needs.</li>
+        <li><b>Delta compression.</b> Send only the fields that changed since the client's last acknowledged snapshot instead of full state every tick, so more frequent updates fit in the same bandwidth budget.</li>
+        <li><b>Dead reckoning.</b> When no new snapshot has arrived in time, extrapolate the remote entity a short distance forward using its last known velocity instead of freezing — trades an occasional visible correction for less perceived staleness.</li>
+        <li><b>Lag compensation (server-side rewind).</b> For direct interactions between players — not modeled in this Duel demo — the host can momentarily rewind its own state to what the acting player actually saw, so high-ping players' actions register fairly.</li>
+        <li><b>Move the host closer.</b> The cheapest win is often not code at all: regional/edge hosting reduces the actual one-way latency everything above is compensating for in the first place.</li>
+      </ol>
+    </details>
+  </div>
+
   <div class="pro">
     <div>
       <h3>Pro</h3>
@@ -122,7 +153,7 @@
 </main>
 
 <script type="module">
-  import { Lane } from './lane.js';
+  import { Lane, HOST_TICK_MS } from './lane.js';
   import { ARENA, RADIUS } from './simulate.js';
 
   const laneNaive = new Lane({ predictive: false });
@@ -139,6 +170,20 @@
   const latencyOut = document.getElementById('latencyOut');
   const jitterOut = document.getElementById('jitterOut');
   const lossOut = document.getElementById('lossOut');
+  const explainStats = document.getElementById('explainStats');
+
+  function updateExplainPanel(conditions) {
+    const roundTripMs = conditions.latencyMs * 2;
+    const delayMs = laneRisto.interpolationDelayMs;
+    explainStats.innerHTML = `
+      <dt>One-way latency</dt><dd>${conditions.latencyMs} ms &plusmn; ${conditions.jitterMs} ms jitter</dd>
+      <dt>Approx. round trip</dt><dd>~${roundTripMs} ms before your own input's effect could return from the host</dd>
+      <dt>Packet loss</dt><dd>${Math.round(conditions.lossRate * 100)}% of messages dropped, each direction</dd>
+      <dt>Naive lane</dt><dd>Waits the full round trip above before showing your move at all — a dropped packet costs one more host tick (${HOST_TICK_MS} ms) on top of that</dd>
+      <dt>Risto &mdash; prediction</dt><dd>Applies your input instantly (0 ms perceived delay). Right now <b id="explainPending">${laneRisto.pendingInputCount}</b> input(s) have been sent but not yet acknowledged by the host, waiting to be replayed on the next reconciliation.</dd>
+      <dt>Risto &mdash; interpolation</dt><dd>Renders the opponent ${delayMs} ms in the past (latency + jitter + 2 host ticks of margin), so there are always two real snapshots to blend between instead of freezing or jumping.</dd>
+    `;
+  }
 
   function applyNetworkConditions() {
     const conditions = {
@@ -151,6 +196,7 @@
     lossOut.textContent = `${lossEl.value}%`;
     laneNaive.setNetworkConditions(conditions);
     laneRisto.setNetworkConditions(conditions);
+    updateExplainPanel(conditions);
   }
   [latencyEl, jitterEl, lossEl].forEach((el) => el.addEventListener('input', applyNetworkConditions));
   applyNetworkConditions();
@@ -209,6 +255,11 @@
 
     statNaive.textContent = 'no local prediction';
     statRisto.textContent = `${laneRisto.pendingInputCount} input(s) awaiting host ack`;
+
+    // Keep the explanation panel's live pending-input count current
+    // without re-rendering the whole panel every frame.
+    const explainPending = document.getElementById('explainPending');
+    if (explainPending) explainPending.textContent = laneRisto.pendingInputCount;
 
     // Test-only hook: exposes the exact render state so the headless e2e
     // check can verify the opponent is actually animating (interpolating)

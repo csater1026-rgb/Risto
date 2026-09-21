@@ -6,7 +6,7 @@ import {
 } from '../src/index.js';
 import { simulate, createInitialState } from './simulate.js';
 
-const HOST_TICK_MS = 50; // 20Hz authoritative tick — a realistic snapshot rate
+export const HOST_TICK_MS = 50; // 20Hz authoritative tick — a realistic snapshot rate
 
 /**
  * One self-contained lane of the Duel demo: its own host and its own
@@ -107,6 +107,12 @@ export class Lane {
 
   get pendingInputCount() {
     return this.predictive ? this.client.pendingInputCount : 0;
+  }
+
+  /** Current render-delay budget the interpolator is using, or null for
+   * the naive lane (which has no interpolator). */
+  get interpolationDelayMs() {
+    return this.predictive ? this.remoteP2.delayMs : null;
   }
 }
 
