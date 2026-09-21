@@ -12,6 +12,19 @@
  * relative to each page's own navigation start, so it isn't meaningfully
  * comparable to a timestamp that came from another process over the
  * network in the first place.
+ *
+ * `delayMs` must be comfortably larger than the connection's actual
+ * one-way transit time (latency + jitter), or this silently stops doing
+ * anything: `sample()` looks for two buffered snapshots bracketing
+ * `now - delayMs`, but the newest snapshot in the buffer is already about
+ * one transit-time old the moment it arrives. If `delayMs` is smaller than
+ * that, `now - delayMs` ends up *ahead* of the newest snapshot on every
+ * call, so `sample()` always takes the "clamp to newest" branch instead of
+ * ever blending — identical behavior to not interpolating at all, just
+ * with no error to tell you. Pick `delayMs` from the actual connection
+ * (e.g. `latencyMs + jitterMs` plus a couple of snapshot intervals of
+ * margin so occasional loss doesn't starve the buffer), not a constant
+ * chosen independently of it — see `setDelayMs()`.
  */
 export class RemoteInterpolator {
   /** @param {{ delayMs?: number }} [opts] */
@@ -19,6 +32,16 @@ export class RemoteInterpolator {
     this.delayMs = delayMs;
     /** @type {{ state: unknown, timestamp: number }[]} */
     this._buffer = [];
+  }
+
+  /**
+   * Update the render-delay budget, e.g. whenever the connection's
+   * measured or configured latency/jitter changes. See the class docs for
+   * why this must stay larger than actual one-way transit time.
+   * @param {number} delayMs
+   */
+  setDelayMs(delayMs) {
+    this.delayMs = delayMs;
   }
 
   /**

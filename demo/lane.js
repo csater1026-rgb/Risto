@@ -30,13 +30,18 @@ export class Lane {
         playerId: 'p1',
         initialState: createInitialState(),
       });
-      this.remoteP2 = new RemoteInterpolator({ delayMs: 100 });
+      this.remoteP2 = new RemoteInterpolator({ delayMs: 0 });
     } else {
       this.naiveState = createInitialState();
     }
 
     this._hostAccumulator = 0;
     this._nextSeq = 0;
+    // Tracked so setNetworkConditions can be called with a partial update
+    // (matching NetworkLink.setConditions' merge semantics) and still
+    // recompute the interpolator delay from the full current picture.
+    this._latencyMs = 0;
+    this._jitterMs = 0;
 
     this.link.toHost.onReceive(({ seq, input }) => {
       this.host.receiveInput('p1', seq, input);
@@ -55,6 +60,17 @@ export class Lane {
   setNetworkConditions(conditions) {
     this.link.toHost.setConditions(conditions);
     this.link.toClient.setConditions(conditions);
+
+    if (this.predictive) {
+      if (conditions.latencyMs !== undefined) this._latencyMs = conditions.latencyMs;
+      if (conditions.jitterMs !== undefined) this._jitterMs = conditions.jitterMs;
+      // Must exceed actual one-way transit time (this.link.toClient's
+      // latency + jitter) or sample() silently stops interpolating — see
+      // RemoteInterpolator's class docs. The +2 host ticks of margin
+      // keeps a second bracketing snapshot available even after an
+      // occasional dropped packet.
+      this.remoteP2.setDelayMs(this._latencyMs + this._jitterMs + HOST_TICK_MS * 2);
+    }
   }
 
   /** Call once per animation frame with the current input and frame dt (ms). */

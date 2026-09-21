@@ -58,3 +58,54 @@ test('push ignores an exact duplicate timestamp', () => {
   interp.push(999, 1000); // same timestamp as the newest entry — dropped
   assert.equal(interp.sample(1300, lerp), 0);
 });
+
+test('delayMs smaller than real transit latency silently defeats interpolation', () => {
+  // Models a snapshot produced every 50ms (a realistic host tick) that
+  // takes a 150ms one-way trip to arrive — sample() is called the instant
+  // each one arrives, which is the worst (most common) case in practice.
+  const oneWayLatencyMs = 150;
+  const hostTickMs = 50;
+  const interp = new RemoteInterpolator({ delayMs: 100 }); // < 150: too small
+
+  let everBlended = false;
+  for (let i = 0; i < 20; i++) {
+    const producedAt = i * hostTickMs;
+    interp.push(i, producedAt);
+    const arrivesAt = producedAt + oneWayLatencyMs;
+    const result = interp.sample(arrivesAt, lerp);
+    // A genuinely blended value between two integer states is never an
+    // integer itself (barring t landing exactly on 0 or 1, vanishingly
+    // unlikely here); clamping to the newest snapshot always returns i
+    // exactly.
+    if (!Number.isInteger(result)) everBlended = true;
+  }
+
+  assert.equal(
+    everBlended,
+    false,
+    'expected delayMs=100 < 150ms latency to never actually interpolate (this documents the failure mode setDelayMs must be used to avoid)'
+  );
+});
+
+test('setDelayMs above real transit latency restores actual interpolation', () => {
+  const oneWayLatencyMs = 150;
+  const hostTickMs = 50;
+  const interp = new RemoteInterpolator({ delayMs: 100 });
+  interp.setDelayMs(oneWayLatencyMs + hostTickMs * 2); // comfortably above latency
+
+  let everBlended = false;
+  for (let i = 0; i < 20; i++) {
+    const producedAt = i * hostTickMs;
+    interp.push(i, producedAt);
+    // +13ms: in the real demo, render frames never land exactly on a host
+    // tick boundary. Sampling at a perfectly tick-aligned time is a
+    // degenerate case where t lands exactly on 0 or 1 and the "blended"
+    // result is indistinguishable from a clamp — this offset avoids that
+    // artifact of the test's own arithmetic, not a real library concern.
+    const arrivesAt = producedAt + oneWayLatencyMs + 13;
+    const result = interp.sample(arrivesAt, lerp);
+    if (!Number.isInteger(result)) everBlended = true;
+  }
+
+  assert.equal(everBlended, true);
+});
