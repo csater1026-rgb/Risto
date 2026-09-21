@@ -25,7 +25,7 @@ const REVENUECAT_WEB_API_KEY = 'YOUR_REVENUECAT_WEB_BILLING_PUBLIC_API_KEY';
 // dashboard, attached to at least one Product in a web-enabled Offering.
 const PRO_ENTITLEMENT_ID = 'pro';
 
-const APP_USER_ID_STORAGE_KEY = 'risto-demo-app-user-id';
+const APP_USER_ID_STORAGE_KEY = 'ristro-demo-app-user-id';
 
 export function isBillingConfigured() {
   return (

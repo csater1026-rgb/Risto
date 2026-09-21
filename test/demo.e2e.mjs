@@ -4,7 +4,7 @@
 // against a local static server (e.g. `python3 -m http.server 8123`).
 import { chromium } from 'playwright';
 
-const BASE_URL = process.env.RISTO_DEMO_URL ?? 'http://localhost:8123/demo/index.html';
+const BASE_URL = process.env.RISTRO_DEMO_URL ?? 'http://localhost:8123/demo/index.html';
 
 async function main() {
   const browser = await chromium.launch({
@@ -48,7 +48,18 @@ async function main() {
   // is what setNetworkConditions' dynamic delayMs (latency + jitter + 2
   // host ticks) exists for for; a fixed delay tuned only for the default
   // would fail again the moment latency changes.
-  await page.waitForTimeout(200); // let snapshots at the new latency start flowing
+  //
+  // The wait here must comfortably exceed the worst-case one-way trip
+  // under the *new* conditions (350ms latency + 30ms jitter = up to
+  // 380ms), not just be "some pause": right after the slider changes, the
+  // interpolator is still correctly serving stale pre-change data until a
+  // fresh snapshot actually arrives — that's accurate behavior, not a bug,
+  // but sampling before it's had time to happen produces the same
+  // held-then-jump signature a real bug would (confirmed by running this
+  // suite repeatedly at the previous 200ms wait: intermittent failures,
+  // not from product flakiness but from this wait being shorter than the
+  // conditions it was about to test).
+  await page.waitForTimeout(500);
   await assertSmoothInterpolation(page, 'at 350ms latency');
 
   // 2c. The explanation panel must actually reflect these settings, not
@@ -74,13 +85,13 @@ async function main() {
   // instead of waiting for the network.
   await page.keyboard.down('ArrowRight');
   await page.waitForTimeout(120); // a few animation frames, well under the 350ms host RTT
-  const statRisto = await page.locator('#statRisto').textContent();
+  const statRistro = await page.locator('#statRistro').textContent();
   await page.keyboard.up('ArrowRight');
 
-  const pending = parseInt(statRisto, 10);
+  const pending = parseInt(statRistro, 10);
   assert(
     Number.isInteger(pending) && pending > 0,
-    `expected Risto lane to have unacknowledged predicted inputs while host RTT is high, got: "${statRisto}"`
+    `expected Ristro lane to have unacknowledged predicted inputs while host RTT is high, got: "${statRistro}"`
   );
 
   // 4. Drop latency/loss back to near zero and confirm the backlog actually
@@ -94,7 +105,7 @@ async function main() {
   await page.locator('#loss').dispatchEvent('input');
   await page.waitForTimeout(1000);
 
-  const statAfterSettle = await page.locator('#statRisto').textContent();
+  const statAfterSettle = await page.locator('#statRistro').textContent();
   const pendingAfter = parseInt(statAfterSettle, 10);
   assert(
     pendingAfter < pending,
@@ -140,7 +151,7 @@ async function main() {
 }
 
 /**
- * Samples the Risto lane's interpolated opponent (p2) at high frequency
+ * Samples the Ristro lane's interpolated opponent (p2) at high frequency
  * and checks for both known failure signatures, since neither alone is a
  * reliable detector:
  *
@@ -166,7 +177,7 @@ async function main() {
 async function assertSmoothInterpolation(page, label) {
   const samples = [];
   for (let i = 0; i < 12; i++) {
-    samples.push(await page.evaluate(() => window.__ristoDebugState.risto.p2));
+    samples.push(await page.evaluate(() => window.__ristroDebugState.ristro.p2));
     await page.waitForTimeout(25);
   }
 

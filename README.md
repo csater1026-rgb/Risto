@@ -1,4 +1,6 @@
-# Risto
+<img src="demo/assets/logo.webp" alt="Ristro" width="120" />
+
+# Ristro
 
 Client-side prediction, server reconciliation, and entity interpolation for
 real-time browser games — the same techniques competitive multiplayer games
@@ -10,7 +12,7 @@ Most web games either accept the lag of "send input, wait for the server,
 then move" or never attempt real-time multiplayer at all, because the
 theory is scattered across blog posts and the implementation has enough
 subtle edge cases (replay ordering, interpolation timing, reconciliation
-without visible rewinding) that it's easy to get wrong. Risto is the
+without visible rewinding) that it's easy to get wrong. Ristro is the
 reusable, tested version of that theory.
 
 ## Why this exists
@@ -22,24 +24,24 @@ reusable, tested version of that theory.
   interpolation well.
 - **It's meant to be understood, not just used.** The included demo runs
   the same game two ways side by side under identical injected latency and
-  packet loss — naive networking vs. Risto — so the difference (and the
+  packet loss — naive networking vs. Ristro — so the difference (and the
   reason for it) is visible, not just claimed.
 
 ## Install
 
 ```bash
-npm install risto
+npm install ristro
 ```
 
-Or drop `dist/risto.global.js` on a page with a `<script>` tag — it exposes
-a `Risto` global with the same exports.
+Or drop `dist/ristro.global.js` on a page with a `<script>` tag — it exposes
+a `Ristro` global with the same exports.
 
 ## The three pieces
 
 **1. Predict locally, the instant input happens.**
 
 ```js
-import { PredictionClient } from 'risto';
+import { PredictionClient } from 'ristro';
 
 const client = new PredictionClient({
   simulate, // (state, inputs, dt) => newState — your game's rules, pure
@@ -57,7 +59,7 @@ sendToHost({ seq, input });
 **2. The host stays authoritative, and reconciles clients that predicted wrong.**
 
 ```js
-import { AuthoritativeHost } from 'risto';
+import { AuthoritativeHost } from 'ristro';
 
 const host = new AuthoritativeHost({ simulate, initialState });
 
@@ -83,7 +85,7 @@ onSnapshotReceived((snapshot) => {
 **3. Smooth out everyone *else*, since you can't predict their input.**
 
 ```js
-import { RemoteInterpolator } from 'risto';
+import { RemoteInterpolator } from 'ristro';
 
 // delayMs must exceed the connection's actual one-way latency + jitter,
 // or sample() silently stops interpolating (it degrades to "clamp to
@@ -108,7 +110,7 @@ const smoothed = remote.sample(Date.now(), (a, b, t) => ({
 ## Testing under real conditions without a real network
 
 ```js
-import { createLoopbackLink } from 'risto';
+import { createLoopbackLink } from 'ristro';
 
 // Two-way channel with adjustable, reproducible latency/jitter/loss —
 // useful for demos and for testing your own game's feel before you ever
@@ -126,7 +128,7 @@ of the netcode logic above it.
 
 ## Demo
 
-`demo/` contains **Duel** — two players, one arena, built on Risto — plus a
+`demo/` contains **Duel** — two players, one arena, built on Ristro — plus a
 side-by-side comparison mode: the same interaction running with and
 without prediction/reconciliation/interpolation, sharing the same injected
 lag/packet-loss sliders, so you can watch the difference directly.
@@ -156,7 +158,7 @@ presets. To try it locally:
 npm install
 npm test    # unit tests for InputHistory, PredictionClient, AuthoritativeHost,
             # RemoteInterpolator, NetworkLink — node:test, no extra deps
-npm run build   # produces dist/risto.esm.js, dist/risto.global.js, and
+npm run build   # produces dist/ristro.esm.js, dist/ristro.global.js, and
                 # demo/billing.bundle.js (the demo needs this to run)
 node test/demo.e2e.mjs   # headless Playwright check against a running
                           # local server (see Demo section above)

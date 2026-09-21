@@ -10,7 +10,7 @@ export const HOST_TICK_MS = 50; // 20Hz authoritative tick — a realistic snaps
 
 /**
  * One self-contained lane of the Duel demo: its own host and its own
- * network link (adjustable latency/jitter/loss), and either full Risto
+ * network link (adjustable latency/jitter/loss), and either full Ristro
  * prediction + reconciliation + interpolation, or a naive pass-through
  * that just renders whatever the last snapshot said — for a fair,
  * side-by-side comparison under identical injected conditions.

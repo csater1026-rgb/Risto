@@ -1,6 +1,6 @@
 // Shared game rules for the Duel demo. This is the one function both the
 // host and every client call — it must stay pure (never mutate `state`)
-// since Risto relies on being able to re-run it safely during replay.
+// since Ristro relies on being able to re-run it safely during replay.
 
 export const ARENA = { width: 480, height: 320 };
 export const RADIUS = 16;

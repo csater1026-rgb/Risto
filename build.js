@@ -8,15 +8,15 @@ await Promise.all([
     entryPoints: ['src/index.js'],
     bundle: true,
     format: 'esm',
-    outfile: 'dist/risto.esm.js',
+    outfile: 'dist/ristro.esm.js',
     sourcemap: true,
   }),
   build({
     entryPoints: ['src/index.js'],
     bundle: true,
     format: 'iife',
-    globalName: 'Risto',
-    outfile: 'dist/risto.global.js',
+    globalName: 'Ristro',
+    outfile: 'dist/ristro.global.js',
     sourcemap: true,
     minify: true,
   }),
@@ -32,4 +32,4 @@ await Promise.all([
   }),
 ]);
 
-console.log('Built dist/risto.esm.js, dist/risto.global.js, and demo/billing.bundle.js');
+console.log('Built dist/ristro.esm.js, dist/ristro.global.js, and demo/billing.bundle.js');

@@ -1,5 +1,5 @@
 {
-  "name": "risto",
+  "name": "ristro",
   "version": "0.1.0",
   "description": "Client-side prediction, server reconciliation, and entity interpolation for real-time browser games — a small, dependency-free netcode engine.",
   "type": "module",
