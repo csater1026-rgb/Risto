@@ -89,8 +89,9 @@ const remote = new RemoteInterpolator({ delayMs: 100 });
 
 onRemoteSnapshot((state, timestamp) => remote.push(state, timestamp));
 
-// Every render frame:
-const smoothed = remote.sample(performance.now(), (a, b, t) => ({
+// Every render frame — same clock the host stamped the snapshot with
+// (Date.now(), not performance.now()).
+const smoothed = remote.sample(Date.now(), (a, b, t) => ({
   x: a.x + (b.x - a.x) * t,
   y: a.y + (b.y - a.y) * t,
 }));
@@ -117,17 +118,21 @@ of the netcode logic above it.
 
 ## Demo
 
-`demo/` contains **Duel** — two players, one arena, built on Risto — plus a
-side-by-side comparison mode: the same interaction running with and
-without prediction/reconciliation/interpolation, sharing the same injected
-lag/packet-loss sliders, so you can watch the difference directly.
+`demo/` is **Duel**: two discs, one ring, knock the other out. Open
+`demo/index.html` via any static server (no bundler). Compare mode runs
+the same fight twice under identical injected lag — naive networking on
+the left, Risto on the right. Play mode is the predicted lane full-width.
+
+The page uses loopback transport on purpose. Real WebRTC is implemented
+(`WebRtcTransport` + `api/signal.js`) but is a stretch goal; NAT
+traversal can fail, and a demo that flakes on camera is worse than no
+demo. See `RISTO.md`.
 
 ## Development
 
 ```bash
 npm install
-npm test    # unit tests for InputHistory, PredictionClient, AuthoritativeHost,
-            # RemoteInterpolator, NetworkLink — node:test, no extra deps
+npm test    # unit tests for the engine + Duel simulate — node:test
 npm run build   # produces dist/risto.esm.js and dist/risto.global.js
 ```
 
@@ -144,6 +149,12 @@ npm run build   # produces dist/risto.esm.js and dist/risto.global.js
   inputs on top of the host's snapshot. It does not attempt to predict
   what other players did in that same window — that's what
   `RemoteInterpolator` is for.
+- `CorrectionSmoother` carries visual error after a reconcile so a
+  collision the client didn't predict eases instead of popping. Round
+  resets snap (they are supposed to teleport).
+- A missing key in `inputs` means "freeze this body"; a present
+  `{dx:0,dy:0}` means "standing still." Client prediction omits the
+  opponent's keys on purpose.
 
 ## License
 

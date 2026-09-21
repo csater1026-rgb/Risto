@@ -20,8 +20,8 @@ async function main() {
   await page.waitForTimeout(300);
 
   // 1. Page loaded with no JS errors and both canvases present.
-  const canvasCount = await page.locator('canvas').count();
-  assert(canvasCount === 2, `expected 2 canvases, got ${canvasCount}`);
+  const canvasCount = await page.locator('.lanes canvas').count();
+  assert(canvasCount === 2, `expected 2 compare-mode canvases, got ${canvasCount}`);
 
   // 2. Crank latency + loss up high so the naive-vs-predicted gap is stark.
   await page.locator('#latency').fill('350');

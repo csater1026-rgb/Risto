@@ -59,6 +59,10 @@ export class PredictionClient {
     const ackedSeq = snapshot.lastProcessedSeq[this.playerId] ?? -1;
     this.history.acknowledge(ackedSeq);
 
+    // Replay only this player's unacked inputs. Other entities keep the
+    // snapshot's copy — we don't try to guess their input. That's what
+    // RemoteInterpolator is for, and it keeps collision prediction honest
+    // (you bump into the last known opponent, not a hallucinated one).
     let state = snapshot.state;
     for (const entry of this.history.all) {
       state = this.simulate(state, { [this.playerId]: entry.input }, entry.dt);

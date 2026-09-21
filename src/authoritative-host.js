@@ -11,11 +11,12 @@
  */
 export class AuthoritativeHost {
   /**
-   * @param {{ simulate: SimulateFn, initialState: unknown }} opts
+   * @param {{ simulate: SimulateFn, initialState: unknown, now?: () => number }} opts
    */
-  constructor({ simulate, initialState }) {
+  constructor({ simulate, initialState, now = () => Date.now() }) {
     this.simulate = simulate;
     this.state = initialState;
+    this.now = now;
     /** @type {Map<string, unknown>} latest known input per player */
     this._pendingInputs = new Map();
     /** @type {Map<string, number>} highest input seq processed per player */
@@ -46,7 +47,7 @@ export class AuthoritativeHost {
   /**
    * Advance the authoritative simulation by one fixed tick.
    * @param {number} dt
-   * @returns {{ state: unknown, lastProcessedSeq: Record<string, number>, timestamp: number }}
+   * @returns {{ state: unknown, lastProcessedSeq: Record<string, number>, timestamp: number, tick: number }}
    */
   tick(dt) {
     const inputs = Object.fromEntries(this._pendingInputs);
@@ -60,7 +61,7 @@ export class AuthoritativeHost {
       state: this.state,
       lastProcessedSeq: Object.fromEntries(this._lastProcessedSeq),
       tick: this._tick,
-      timestamp: Date.now(),
+      timestamp: this.now(),
     };
   }
 }

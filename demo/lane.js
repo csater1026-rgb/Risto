@@ -2,18 +2,20 @@ import {
   AuthoritativeHost,
   PredictionClient,
   RemoteInterpolator,
+  CorrectionSmoother,
   createLoopbackLink,
 } from '../src/index.js';
 import { simulate, createInitialState } from './simulate.js';
+import { thinkBot } from './bot.js';
 
-const HOST_TICK_MS = 50; // 20Hz authoritative tick — a realistic snapshot rate
+export const HOST_TICK_MS = 50; // 20 Hz snapshots — realistic, not cinematic
 
 /**
- * One self-contained lane of the Duel demo: its own host and its own
- * network link (adjustable latency/jitter/loss), and either full Risto
- * prediction + reconciliation + interpolation, or a naive pass-through
- * that just renders whatever the last snapshot said — for a fair,
- * side-by-side comparison under identical injected conditions.
+ * One self-contained lane of Duel: its own host, its own loopback link,
+ * and either full Risto prediction + reconciliation + interpolation, or a
+ * naive pass-through that just renders the last snapshot. The demo feeds
+ * both lanes the same input and the same pre-rolled delivery so the split
+ * is the netcode, not a different network.
  */
 export class Lane {
   constructor({ predictive }) {
@@ -23,6 +25,11 @@ export class Lane {
       initialState: createInitialState(),
     });
     this.link = createLoopbackLink();
+    this.smoother = new CorrectionSmoother();
+    this._botSeq = 0;
+    this._nextSeq = 0;
+    this._hostAccumulator = 0;
+    this._lastPhase = 'play';
 
     if (predictive) {
       this.client = new PredictionClient({
@@ -35,17 +42,17 @@ export class Lane {
       this.naiveState = createInitialState();
     }
 
-    this._hostAccumulator = 0;
-    this._nextSeq = 0;
-
     this.link.toHost.onReceive(({ seq, input }) => {
       this.host.receiveInput('p1', seq, input);
     });
 
     this.link.toClient.onReceive((snapshot) => {
       if (this.predictive) {
+        const prev = this.client.getState().p1;
         this.client.reconcile(snapshot);
+        this.smoother.note(prev, this.client.getState().p1);
         this.remoteP2.push(snapshot.state.p2, snapshot.timestamp);
+        if (snapshot.state.phase !== 'play') this.smoother.reset();
       } else {
         this.naiveState = snapshot.state;
       }
@@ -55,36 +62,51 @@ export class Lane {
   setNetworkConditions(conditions) {
     this.link.toHost.setConditions(conditions);
     this.link.toClient.setConditions(conditions);
+    if (this.predictive) {
+      // Stay ahead of one snapshot + jitter so sample() has two brackets
+      // to blend, even when the "network" is being unpleasant.
+      this.remoteP2.delayMs = Math.max(
+        HOST_TICK_MS * 2,
+        HOST_TICK_MS + (conditions.jitterMs ?? 0) + 20,
+      );
+    }
   }
 
-  /** Call once per animation frame with the current input and frame dt (ms). */
-  update(dt, input) {
+  /**
+   * @param {number} dt frame delta in ms
+   * @param {{ dx: number, dy: number }} input
+   * @param {{ toHost?: { drop?: boolean, delayMs?: number }, toClient?: { drop?: boolean, delayMs?: number } }} [rolls]
+   */
+  update(dt, input, rolls = {}) {
     if (this.predictive) {
       const { seq } = this.client.applyLocalInput(input, dt);
-      this.link.toHost.send({ seq, input });
+      this.link.toHost.send({ seq, input }, rolls.toHost);
     } else {
-      this.link.toHost.send({ seq: this._nextSeq++, input });
+      this.link.toHost.send({ seq: this._nextSeq++, input }, rolls.toHost);
     }
 
     this._hostAccumulator += dt;
     while (this._hostAccumulator >= HOST_TICK_MS) {
+      const hostState = this.host.state;
+      if (hostState.phase === 'play') {
+        this.host.receiveInput('p2', this._botSeq++, thinkBot(hostState));
+      }
       const snapshot = this.host.tick(HOST_TICK_MS);
-      this.link.toClient.send(snapshot);
+      this.link.toClient.send(snapshot, rolls.toClient);
       this._hostAccumulator -= HOST_TICK_MS;
     }
   }
 
   /**
-   * @param {number} now must be Date.now()-based — the same clock
-   *   AuthoritativeHost stamps its snapshots with. Do not pass a
-   *   performance.now() value here; see RemoteInterpolator's class docs.
-   * @returns {{ p1: {x:number,y:number}, p2: {x:number,y:number} }}
+   * @param {number} now Date.now()-based, matching AuthoritativeHost stamps
+   * @param {number} [dtSeconds]
    */
-  getRenderState(now) {
+  getRenderState(now, dtSeconds = 1 / 60) {
     if (this.predictive) {
       const clientState = this.client.getState();
-      const p2 = this.remoteP2.sample(now, lerpPoint) ?? clientState.p2;
-      return { p1: clientState.p1, p2 };
+      const p1 = this.smoother.apply(clientState.p1, dtSeconds);
+      const p2 = this.remoteP2.sample(now, lerpBody) ?? clientState.p2;
+      return { ...clientState, p1, p2 };
     }
     return this.naiveState;
   }
@@ -92,8 +114,17 @@ export class Lane {
   get pendingInputCount() {
     return this.predictive ? this.client.pendingInputCount : 0;
   }
+
+  get interpolationDelayMs() {
+    return this.predictive ? this.remoteP2.delayMs : 0;
+  }
 }
 
-function lerpPoint(a, b, t) {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+function lerpBody(a, b, t) {
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    vx: a.vx + (b.vx - a.vx) * t,
+    vy: a.vy + (b.vy - a.vy) * t,
+  };
 }

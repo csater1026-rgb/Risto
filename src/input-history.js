@@ -26,7 +26,10 @@ export class InputHistory {
    * @param {number} seq
    */
   acknowledge(seq) {
-    this._entries = this._entries.filter((e) => e.seq > seq);
+    const entries = this._entries;
+    let i = 0;
+    while (i < entries.length && entries[i].seq <= seq) i += 1;
+    if (i > 0) this._entries = entries.slice(i);
   }
 
   /** @returns {{ seq: number, input: unknown, dt: number }[]} */

@@ -3,120 +3,293 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Risto — Duel demo</title>
+<title>Risto — Duel. Hide the lag.</title>
 <style>
   :root{
-    --bg:#0d1117; --panel:#151b24; --panel-2:#1b2330; --line:#26303d;
-    --ink:#e6edf3; --ink-dim:#9fb0c3; --ink-faint:#6e7f92;
-    --accent:#4f9df7; --good:#3fb950; --bad:#f85149;
+    --bg:#07090c;
+    --panel:#10161d;
+    --panel-2:#161d27;
+    --line:#243040;
+    --ink:#e8eef5;
+    --ink-dim:#9aadc2;
+    --ink-faint:#6d8096;
+    --you:#5aa7ff;
+    --bot:#ff5d7a;
+    --good:#3ee07e;
+    --bad:#ff5d7a;
+    --gold:#e7c36a;
+    --accent:#5aa7ff;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
     --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   }
   *{box-sizing:border-box}
-  body{
-    margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
-    font-size:15px; line-height:1.5;
-  }
-  header{padding:22px 24px 8px; max-width:1080px; margin:0 auto}
-  header h1{margin:0 0 4px; font-size:22px}
-  header p{margin:0; color:var(--ink-dim); font-size:14px; max-width:640px}
-  main{max-width:1080px; margin:0 auto; padding:18px 24px 60px}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5}
+  body{min-height:100vh}
+  a{color:var(--you);text-decoration:none}
+  a:hover{text-decoration:underline}
 
-  .controls{
-    display:flex; gap:22px; flex-wrap:wrap; align-items:center;
-    background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    padding:14px 18px; margin-bottom:18px;
-  }
-  .controls label{display:flex; flex-direction:column; gap:4px; font-size:12.5px; color:var(--ink-dim)}
-  .controls output{color:var(--ink); font-family:var(--mono); font-size:12.5px}
-  .controls input[type=range]{accent-color:var(--accent); width:150px}
-  .hint{color:var(--ink-faint); font-size:12.5px; margin-bottom:14px}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px 80px}
 
-  .lanes{display:grid; grid-template-columns:1fr 1fr; gap:16px}
-  @media(max-width:720px){ .lanes{grid-template-columns:1fr} }
-  .lane{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px}
-  .lane h2{margin:0 0 2px; font-size:14px; letter-spacing:.3px}
-  .lane p.sub{margin:0 0 10px; color:var(--ink-dim); font-size:12.5px}
-  .lane canvas{display:block; width:100%; height:auto; background:#0a0e14; border-radius:8px; border:1px solid var(--line)}
-  .lane .stat{margin-top:8px; font-family:var(--mono); font-size:12px; color:var(--ink-faint)}
-  .lane.naive h2{color:var(--bad)}
-  .lane.predictive h2{color:var(--good)}
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:18px 0 8px;
+  }
+  .brand{display:flex;align-items:baseline;gap:10px}
+  .brand h1{margin:0;font-size:20px;letter-spacing:.18em;font-weight:800}
+  .brand span{color:var(--ink-faint);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+  .top-links{display:flex;gap:14px;font-size:13px;color:var(--ink-dim)}
+
+  .hero{padding:8px 0 18px;max-width:720px}
+  .hero h2{margin:0 0 8px;font-size:34px;line-height:1.15;letter-spacing:-.03em}
+  .hero p{margin:0;color:var(--ink-dim);max-width:54ch}
+
+  .toolbar{
+    display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;
+    background:linear-gradient(180deg,var(--panel),#0e141b);
+    border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:8px 0 14px;
+  }
+  .modes{display:flex;background:var(--panel-2);border-radius:10px;padding:3px;border:1px solid var(--line)}
+  .modes button{
+    appearance:none;border:0;background:transparent;color:var(--ink-dim);
+    padding:6px 12px;border-radius:8px;font-weight:650;font-size:13px;cursor:pointer;
+  }
+  .modes button.on{background:#243041;color:var(--ink)}
+  .presets{display:flex;gap:6px;flex-wrap:wrap}
+  .presets button, .chip{
+    appearance:none;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-dim);
+    padding:5px 10px;border-radius:999px;font-size:12px;cursor:pointer;font-weight:600;
+  }
+  .presets button.on{border-color:var(--you);color:var(--you);background:rgba(90,167,255,.08)}
+
+  .sliders{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+  .sliders label{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--ink-faint);letter-spacing:.04em}
+  .sliders output{color:var(--ink);font-family:var(--mono);font-size:12px}
+  .sliders input[type=range]{accent-color:var(--accent);width:132px}
+
+  .hint{color:var(--ink-faint);font-size:12.5px;margin:0 0 12px}
+
+  .lanes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:800px){ .lanes{grid-template-columns:1fr} .hero h2{font-size:26px} }
+  .lane{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;
+    min-width:0;
+  }
+  .lane header.lh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px}
+  .lane h3{margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+  .lane .sub{margin:0;color:var(--ink-dim);font-size:12px}
+  .lane.naive h3{color:var(--bad)}
+  .lane.predictive h3{color:var(--good)}
+  canvas{
+    display:block;width:100%;height:auto;background:#07090c;border-radius:10px;
+    border:1px solid var(--line); touch-action:none;
+  }
+  .stat{margin-top:8px;font-family:var(--mono);font-size:11.5px;color:var(--ink-faint)}
+
+  .play-wrap{display:none}
+  body.mode-play .lanes{display:none}
+  body.mode-play .play-wrap{display:block}
+  .play-wrap .lane{max-width:760px;margin:0 auto}
+
+  .keys{
+    display:flex;gap:6px;margin-left:auto;
+  }
+  .keys kbd{
+    display:inline-flex;align-items:center;justify-content:center;
+    min-width:28px;height:26px;padding:0 7px;border-radius:6px;
+    border:1px solid var(--line);background:var(--panel-2);color:var(--ink-dim);
+    font-family:var(--mono);font-size:11px;
+  }
+  .keys kbd.hot{border-color:var(--you);color:var(--you);background:rgba(90,167,255,.1)}
+
+  .explain{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px;
+  }
+  @media(max-width:800px){ .explain{grid-template-columns:1fr} }
+  .explain article{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 16px 18px;
+  }
+  .explain h3{margin:0 0 6px;font-size:14px}
+  .explain p{margin:0;color:var(--ink-dim);font-size:13px}
 
   .pro{
-    margin-top:20px; background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    padding:16px 18px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    margin-top:18px;background:linear-gradient(180deg,#171308,var(--panel));
+    border:1px solid #3a3218;border-radius:14px;padding:16px 18px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
   }
-  .pro h3{margin:0 0 4px; font-size:14px}
-  .pro p{margin:0; color:var(--ink-dim); font-size:12.5px; max-width:520px}
+  .pro h3{margin:0 0 4px;font-size:14px;color:var(--gold)}
+  .pro p{margin:0;color:var(--ink-dim);font-size:12.5px;max-width:560px}
   button.btn{
-    background:var(--accent); border:1px solid var(--accent); color:#0b1420;
-    padding:9px 16px; border-radius:9px; cursor:pointer; font-weight:650; font-size:13.5px;
+    background:var(--gold);border:1px solid var(--gold);color:#1a1408;
+    padding:9px 16px;border-radius:9px;cursor:pointer;font-weight:750;font-size:13.5px;
   }
-  button.btn:hover{filter:brightness(1.08)}
+  button.btn:hover{filter:brightness(1.06)}
+  button.btn.ghost{
+    background:transparent;color:var(--gold);
+  }
+
+  .modal-bg{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);
+    align-items:center;justify-content:center;padding:20px;z-index:20;
+  }
+  .modal-bg.open{display:flex}
+  .modal{
+    background:var(--panel);border:1px solid #3a3218;border-radius:16px;
+    padding:22px;max-width:440px;width:100%;
+  }
+  .modal h3{margin:0 0 8px;color:var(--gold)}
+  .modal p{margin:0 0 10px;color:var(--ink-dim);font-size:13.5px}
+  .modal ul{margin:0 0 16px;padding-left:18px;color:var(--ink-dim);font-size:13.5px}
+  .modal .row{display:flex;gap:8px;flex-wrap:wrap}
+
+  footer{margin-top:28px;color:var(--ink-faint);font-size:12px}
 </style>
 </head>
 <body>
-<header>
-  <h1>Risto — Duel</h1>
-  <p>
-    The same interaction, run twice, under identical injected network
-    conditions. Left has no prediction. Right uses Risto's client-side
-    prediction, server reconciliation, and entity interpolation.
-  </p>
-</header>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>RISTO</h1>
+      <span>netcode engine</span>
+    </div>
+    <nav class="top-links">
+      <a href="https://github.com/csater1026-rgb/Risto">GitHub</a>
+      <a href="#how">How it works</a>
+    </nav>
+  </header>
 
-<main>
-  <div class="controls">
-    <label>Latency
-      <input id="latency" type="range" min="0" max="400" value="150" step="10" />
-      <output id="latencyOut">150 ms</output>
-    </label>
-    <label>Jitter
-      <input id="jitter" type="range" min="0" max="150" value="30" step="10" />
-      <output id="jitterOut">30 ms</output>
-    </label>
-    <label>Packet loss
-      <input id="loss" type="range" min="0" max="40" value="5" step="1" />
-      <output id="lossOut">5%</output>
-    </label>
+  <section class="hero">
+    <h2>Hide the lag. Keep the fight.</h2>
+    <p>
+      Client-side prediction, server reconciliation, and entity interpolation —
+      the same tricks competitive games use — as a small, dependency-free JS
+      library. Duel is the proof: two discs, one ring, knock the other out.
+      The left lane waits on the host. The right lane doesn't.
+    </p>
+  </section>
+
+  <div class="toolbar">
+    <div class="modes" role="tablist">
+      <button id="modeCompare" class="on" type="button">Compare</button>
+      <button id="modePlay" type="button">Play</button>
+    </div>
+    <div class="presets" id="presets">
+      <button type="button" data-l="15" data-j="4" data-s="0">LAN</button>
+      <button type="button" data-l="80" data-j="18" data-s="1">Wi-Fi</button>
+      <button type="button" data-l="150" data-j="30" data-s="5" class="on">4G</button>
+      <button type="button" data-l="280" data-j="70" data-s="12">Bad</button>
+    </div>
+    <div class="sliders">
+      <label>Latency
+        <input id="latency" type="range" min="0" max="400" value="150" step="10" />
+        <output id="latencyOut">150 ms</output>
+      </label>
+      <label>Jitter
+        <input id="jitter" type="range" min="0" max="150" value="30" step="10" />
+        <output id="jitterOut">30 ms</output>
+      </label>
+      <label>Packet loss
+        <input id="loss" type="range" min="0" max="40" value="5" step="1" />
+        <output id="lossOut">5%</output>
+      </label>
+    </div>
+    <div class="keys" aria-hidden="true">
+      <kbd data-k="arrowleft">←</kbd>
+      <kbd data-k="arrowup">↑</kbd>
+      <kbd data-k="arrowdown">↓</kbd>
+      <kbd data-k="arrowright">→</kbd>
+    </div>
   </div>
-  <p class="hint">Arrow keys or WASD to move — the same input drives both lanes at once, so the comparison is fair.</p>
+  <p class="hint" id="hint">Arrow keys or WASD — the same input drives both lanes, through the same fake network. Loopback, not WebRTC: this take will work.</p>
 
   <div class="lanes">
     <div class="lane naive">
-      <h2>Naive networking</h2>
-      <p class="sub">Waits for the host's next snapshot before showing anything.</p>
-      <canvas id="canvasNaive" width="480" height="320"></canvas>
+      <header class="lh">
+        <h3>Naive networking</h3>
+        <p class="sub">Waits for the host snapshot. This is what lag feels like.</p>
+      </header>
+      <canvas id="canvasNaive" width="560" height="400"></canvas>
       <div class="stat" id="statNaive">—</div>
     </div>
     <div class="lane predictive">
-      <h2>Risto</h2>
-      <p class="sub">Predicts your input instantly; smooths the opponent via interpolation.</p>
-      <canvas id="canvasRisto" width="480" height="320"></canvas>
+      <header class="lh">
+        <h3>Risto</h3>
+        <p class="sub">Predicts you instantly. Smooths the bot. Corrects without a pop.</p>
+      </header>
+      <canvas id="canvasRisto" width="560" height="400"></canvas>
       <div class="stat" id="statRisto">—</div>
     </div>
   </div>
 
-  <div class="pro">
-    <div>
-      <h3>Pro</h3>
-      <p>More arenas, private rooms, and real WebRTC peer-to-peer play instead of the in-page loopback simulation.</p>
+  <div class="play-wrap">
+    <div class="lane predictive">
+      <header class="lh">
+        <h3>Duel</h3>
+        <p class="sub">You vs the bot. Knock them out of the ring.</p>
+      </header>
+      <canvas id="canvasPlay" width="560" height="400"></canvas>
+      <div class="stat" id="statPlay">—</div>
     </div>
-    <button class="btn" id="unlockPro">Unlock Pro</button>
   </div>
-</main>
+
+  <section class="explain" id="how">
+    <article>
+      <h3>1. Predict locally</h3>
+      <p>The instant you press a key, Risto applies that input to your copy of the sim. You never wait a round trip to see yourself move.</p>
+    </article>
+    <article>
+      <h3>2. Reconcile the truth</h3>
+      <p>The host is still boss. When its snapshot lands, unacked inputs replay on top of it. A correction smoother hides the one-frame disagreement.</p>
+    </article>
+    <article>
+      <h3>3. Interpolate everyone else</h3>
+      <p>You can't predict the bot's next input, so Risto renders it slightly in the past and blends between snapshots. Motion stays smooth under jitter and loss.</p>
+    </article>
+  </section>
+
+  <div class="pro" id="pro">
+    <div>
+      <h3>Risto Pro</h3>
+      <p>Gold ring, private-room stretch goals, and the real WebRTC transport (same engine, actual peers). Checkout is a RevenueCat Web Billing stub until you drop in a key.</p>
+    </div>
+    <button class="btn" id="unlockPro" type="button">Unlock Pro</button>
+  </div>
+
+  <footer>
+    Open source under MIT. Transport is a swappable <code>send / onReceive</code> —
+    this page uses the loopback injector so a demo never depends on NAT.
+  </footer>
+</div>
+
+<div class="modal-bg" id="proModal" role="dialog" aria-modal="true" aria-labelledby="proTitle">
+  <div class="modal">
+    <h3 id="proTitle">Risto Pro</h3>
+    <p>
+      This is the documented RevenueCat Web Billing integration point
+      (<code>purchases-js</code>). Wiring it live needs a RevenueCat project API key
+      from your own dashboard — there isn't one baked into the open-source repo.
+    </p>
+    <ul>
+      <li>Gold ring skin on this demo</li>
+      <li>WebRTC peer-to-peer path (stretch, same engine code)</li>
+      <li>Private rooms, more arenas — listed, not shipped</li>
+    </ul>
+    <div class="row">
+      <button class="btn" id="simulateUnlock" type="button">Simulate unlock</button>
+      <button class="btn ghost" id="closePro" type="button">Close</button>
+    </div>
+  </div>
+</div>
 
 <script type="module">
   import { Lane } from './lane.js';
-  import { ARENA, RADIUS } from './simulate.js';
+  import { createRenderer } from './render.js';
+  import { rollDelivery } from '../src/index.js';
 
   const laneNaive = new Lane({ predictive: false });
   const laneRisto = new Lane({ predictive: true });
-
-  const ctxNaive = document.getElementById('canvasNaive').getContext('2d');
-  const ctxRisto = document.getElementById('canvasRisto').getContext('2d');
-  const statNaive = document.getElementById('statNaive');
-  const statRisto = document.getElementById('statRisto');
+  const drawNaive = createRenderer(document.getElementById('canvasNaive'));
+  const drawRisto = createRenderer(document.getElementById('canvasRisto'));
+  const drawPlay = createRenderer(document.getElementById('canvasPlay'));
 
   const latencyEl = document.getElementById('latency');
   const jitterEl = document.getElementById('jitter');
@@ -124,25 +297,78 @@
   const latencyOut = document.getElementById('latencyOut');
   const jitterOut = document.getElementById('jitterOut');
   const lossOut = document.getElementById('lossOut');
+  const statNaive = document.getElementById('statNaive');
+  const statRisto = document.getElementById('statRisto');
+  const statPlay = document.getElementById('statPlay');
 
-  function applyNetworkConditions() {
-    const conditions = {
+  const PRO_KEY = 'risto.pro';
+  let pro = localStorage.getItem(PRO_KEY) === '1';
+  syncProButton();
+
+  function conditions() {
+    return {
       latencyMs: Number(latencyEl.value),
       jitterMs: Number(jitterEl.value),
       lossRate: Number(lossEl.value) / 100,
     };
-    latencyOut.textContent = `${conditions.latencyMs} ms`;
-    jitterOut.textContent = `${conditions.jitterMs} ms`;
+  }
+
+  function applyNetworkConditions() {
+    const c = conditions();
+    latencyOut.textContent = `${c.latencyMs} ms`;
+    jitterOut.textContent = `${c.jitterMs} ms`;
     lossOut.textContent = `${lossEl.value}%`;
-    laneNaive.setNetworkConditions(conditions);
-    laneRisto.setNetworkConditions(conditions);
+    laneNaive.setNetworkConditions(c);
+    laneRisto.setNetworkConditions(c);
+    document.querySelectorAll('#presets button').forEach((btn) => {
+      btn.classList.toggle(
+        'on',
+        Number(btn.dataset.l) === c.latencyMs &&
+          Number(btn.dataset.j) === c.jitterMs &&
+          Number(btn.dataset.s) === Number(lossEl.value),
+      );
+    });
   }
   [latencyEl, jitterEl, lossEl].forEach((el) => el.addEventListener('input', applyNetworkConditions));
+  document.getElementById('presets').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    latencyEl.value = btn.dataset.l;
+    jitterEl.value = btn.dataset.j;
+    lossEl.value = btn.dataset.s;
+    applyNetworkConditions();
+  });
   applyNetworkConditions();
 
+  document.getElementById('modeCompare').addEventListener('click', () => setMode('compare'));
+  document.getElementById('modePlay').addEventListener('click', () => setMode('play'));
+  function setMode(mode) {
+    document.body.classList.toggle('mode-play', mode === 'play');
+    document.getElementById('modeCompare').classList.toggle('on', mode === 'compare');
+    document.getElementById('modePlay').classList.toggle('on', mode === 'play');
+    document.getElementById('hint').textContent =
+      mode === 'play'
+        ? 'Arrow keys or WASD to move. Shove the pink disc out of the ring.'
+        : 'Arrow keys or WASD — the same input drives both lanes, through the same fake network. Loopback, not WebRTC: this take will work.';
+  }
+
   const keys = new Set();
-  window.addEventListener('keydown', (e) => keys.add(e.key.toLowerCase()));
-  window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+  function keyName(e) { return e.key.toLowerCase(); }
+  window.addEventListener('keydown', (e) => {
+    const k = keyName(e);
+    if (['arrowleft','arrowright','arrowup','arrowdown',' '].includes(k)) e.preventDefault();
+    keys.add(k);
+    highlightKeys();
+  });
+  window.addEventListener('keyup', (e) => {
+    keys.delete(keyName(e));
+    highlightKeys();
+  });
+  function highlightKeys() {
+    document.querySelectorAll('.keys kbd').forEach((kbd) => {
+      kbd.classList.toggle('hot', keys.has(kbd.dataset.k));
+    });
+  }
 
   function readInput() {
     let dx = 0, dy = 0;
@@ -151,68 +377,71 @@
     if (keys.has('arrowup') || keys.has('w')) dy -= 1;
     if (keys.has('arrowdown') || keys.has('s')) dy += 1;
     if (dx !== 0 && dy !== 0) {
-      const norm = Math.SQRT1_2;
-      dx *= norm; dy *= norm;
+      const n = Math.SQRT1_2;
+      dx *= n; dy *= n;
     }
     return { dx, dy };
   }
 
-  function draw(ctx, state) {
-    ctx.clearRect(0, 0, ARENA.width, ARENA.height);
-    ctx.fillStyle = '#f85149';
-    ctx.beginPath();
-    ctx.arc(state.p2.x, state.p2.y, RADIUS, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#4f9df7';
-    ctx.beginPath();
-    ctx.arc(state.p1.x, state.p1.y, RADIUS, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   let lastTime = performance.now();
   function frame(now) {
-    const dt = Math.min(50, now - lastTime); // clamp huge gaps (tab backgrounded, etc.)
+    const dt = Math.min(50, now - lastTime);
     lastTime = now;
-
     const input = readInput();
-    laneNaive.update(dt, input);
-    laneRisto.update(dt, input);
+    const c = conditions();
+    // One roll per direction per frame, shared by both lanes.
+    const toHost = rollDelivery(c);
+    const toClient = rollDelivery(c);
+    laneNaive.update(dt, input, { toHost, toClient });
+    laneRisto.update(dt, input, { toHost, toClient });
 
-    // Snapshots are stamped with Date.now() (AuthoritativeHost), not the
-    // rAF callback's performance.now()-based `now` — those are different
-    // clocks (performance.now() is relative to this page's own navigation
-    // start) and must not be mixed when sampling the RemoteInterpolator.
     const wallClockNow = Date.now();
-    const naiveState = laneNaive.getRenderState(wallClockNow);
-    const ristoState = laneRisto.getRenderState(wallClockNow);
-    draw(ctxNaive, naiveState);
-    draw(ctxRisto, ristoState);
+    const dtSeconds = dt / 1000;
+    const naiveState = laneNaive.getRenderState(wallClockNow, dtSeconds);
+    const ristoState = laneRisto.getRenderState(wallClockNow, dtSeconds);
 
-    statNaive.textContent = 'no local prediction';
-    statRisto.textContent = `${laneRisto.pendingInputCount} input(s) awaiting host ack`;
+    drawNaive.draw(naiveState, { now, pro });
+    drawRisto.draw(ristoState, { now, pro });
+    if (document.body.classList.contains('mode-play')) {
+      drawPlay.draw(ristoState, { now, pro });
+    }
 
-    // Test-only hook: exposes the exact render state so the headless e2e
-    // check can verify the opponent is actually animating (interpolating)
-    // rather than reading pixels off the canvas. Not part of the public API.
+    const rtt = c.latencyMs * 2;
+    statNaive.textContent = `no local prediction · ~${rtt} ms before you move`;
+    const pending = laneRisto.pendingInputCount;
+    const interp = Math.round(laneRisto.interpolationDelayMs);
+    const ristoLine = `${pending} input(s) awaiting host ack · interp ${interp} ms`;
+    statRisto.textContent = ristoLine;
+    statPlay.textContent = ristoLine;
+
     window.__ristoDebugState = { naive: naiveState, risto: ristoState };
-
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 
-  // --- RevenueCat Web Billing integration point -----------------------
-  // This is a documented stub, not a live purchase flow: wiring it up for
-  // real needs a RevenueCat project + public API key, which only exists
-  // once you've created one in your own RevenueCat dashboard. See
-  // https://www.revenuecat.com/docs/web/web-billing for the Web Billing
-  // SDK this would call (purchases-js), and swap this handler for a real
-  // `Purchases.configure(...)` + `purchase(...)` call once you have keys.
+  const modal = document.getElementById('proModal');
   document.getElementById('unlockPro').addEventListener('click', () => {
-    alert(
-      'Pro checkout goes here — wire up RevenueCat Web Billing ' +
-      '(purchases-js) with your own project API key to make this live.'
-    );
+    if (pro) {
+      pro = false;
+      localStorage.removeItem(PRO_KEY);
+      syncProButton();
+      return;
+    }
+    modal.classList.add('open');
   });
+  document.getElementById('closePro').addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+  document.getElementById('simulateUnlock').addEventListener('click', () => {
+    pro = true;
+    localStorage.setItem(PRO_KEY, '1');
+    modal.classList.remove('open');
+    syncProButton();
+  });
+  function syncProButton() {
+    const btn = document.getElementById('unlockPro');
+    btn.textContent = pro ? 'Pro unlocked' : 'Unlock Pro';
+    btn.classList.toggle('ghost', pro);
+  }
 </script>
 </body>
 </html>
