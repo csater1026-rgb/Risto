@@ -94,6 +94,12 @@ debug overlay: Duel renders it and knockouts are decided on it. Push
 from each host snapshot; `ShadowBody.gap(predicted, shadow)` is how far
 the player has run ahead of the world.
 
+**`ProbeSampler` / `runProbe`** — one report for game devs covering
+injected network, uplink vs downlink path, queues, host tick cost,
+client interpolator health, and prediction accuracy. Live in the demo
+lab strip; headless via `runProbe` for CI. This is a synthetic gym,
+not real internet routing or a GPU profiler.
+
 **`simulate(state, inputs, dt) => newState`** — game rules, **pure**.
 A missing key in `inputs` means "this body is unknown this tick: freeze
 it." A present `{dx:0,dy:0}` means "standing still." That distinction

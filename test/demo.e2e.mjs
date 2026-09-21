@@ -28,13 +28,15 @@ async function main() {
 
   await page.goto(BASE_URL, { waitUntil: 'load' });
   await page.waitForFunction(
-    () => window.__ristoDebugState?.risto?.phase === 'play',
+    () => window.__ristoDebugState?.risto?.phase === 'play' && Number.isFinite(window.__ristoDebugState?.lab?.feel?.score),
     { timeout: 4000 },
   );
 
   // 1. Page loaded with no JS errors and both canvases present.
   const canvasCount = await page.locator('.lanes canvas').count();
   assert(canvasCount === 2, `expected 2 compare-mode canvases, got ${canvasCount}`);
+  const feel = await page.locator('#labFeel').textContent();
+  assert(/^\d+$/.test(feel.trim()), `expected a numeric feel score in the lab, got "${feel}"`);
 
   // 2. Crank latency + loss up high so the naive-vs-predicted gap is stark.
   await page.locator('#latency').fill('350');

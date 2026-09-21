@@ -19,6 +19,8 @@ export class RemoteInterpolator {
     this.delayMs = delayMs;
     /** @type {{ state: unknown, timestamp: number }[]} */
     this._buffer = [];
+    /** @type {'empty' | 'hold' | 'blend' | 'underrun'} */
+    this.lastStatus = 'empty';
   }
 
   /**
@@ -53,13 +55,23 @@ export class RemoteInterpolator {
    */
   sample(now, interpolate) {
     const buf = this._buffer;
-    if (buf.length === 0) return null;
-    if (buf.length === 1) return buf[0].state;
+    if (buf.length === 0) {
+      this.lastStatus = 'empty';
+      return null;
+    }
+    if (buf.length === 1) {
+      this.lastStatus = 'hold';
+      return buf[0].state;
+    }
 
     const renderTime = now - this.delayMs;
 
-    if (renderTime <= buf[0].timestamp) return buf[0].state;
+    if (renderTime <= buf[0].timestamp) {
+      this.lastStatus = 'hold';
+      return buf[0].state;
+    }
     if (renderTime >= buf[buf.length - 1].timestamp) {
+      this.lastStatus = 'underrun';
       return buf[buf.length - 1].state;
     }
 
@@ -69,9 +81,11 @@ export class RemoteInterpolator {
       if (a.timestamp <= renderTime && renderTime <= b.timestamp) {
         const span = b.timestamp - a.timestamp || 1;
         const t = (renderTime - a.timestamp) / span;
+        this.lastStatus = 'blend';
         return interpolate(a.state, b.state, t);
       }
     }
+    this.lastStatus = 'underrun';
     return buf[buf.length - 1].state;
   }
 }

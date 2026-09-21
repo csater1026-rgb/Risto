@@ -121,6 +121,27 @@ A real transport (e.g. a WebRTC data channel) implements the same
 `send` / `onReceive` shape, so swapping one for the other doesn't touch any
 of the netcode logic above it.
 
+## One lab report for game devs
+
+```js
+import { runProbe, mulberry32 } from 'risto';
+
+const report = runProbe({
+  simulate,
+  initialState,
+  seconds: 4,
+  conditions: { latencyMs: 150, jitterMs: 30, lossRate: 0.05 },
+  inputAt: (t) => ({ dx: 1, dy: 0 }),
+  rng: mulberry32(1),
+});
+// report.network / routing / queueing / server / rendering / prediction / feel
+```
+
+That is a synthetic gym (injected lag, uplink vs downlink, queues, host
+tick time, interpolator underruns, Shadow Body gap). It is not real
+internet routing or a GPU profiler. The Duel page shows the same six
+layers live and can copy the JSON.
+
 ## Demo
 
 `demo/` is **Duel**: two discs, one ring, knock the other out. Open

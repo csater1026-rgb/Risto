@@ -4,5 +4,6 @@ export { AuthoritativeHost } from './authoritative-host.js';
 export { RemoteInterpolator } from './interpolator.js';
 export { CorrectionSmoother } from './correction-smoother.js';
 export { ShadowBody } from './shadow-body.js';
+export { ProbeSampler, runProbe, mulberry32, summarize, percentile } from './probe.js';
 export { NetworkLink, createLoopbackLink, rollDelivery } from './network-link.js';
 export { WebRtcTransport, HttpPollingSignaling } from './webrtc-transport.js';

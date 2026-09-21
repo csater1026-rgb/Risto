@@ -32,6 +32,9 @@ export class Lane {
     this._nextSeq = 0;
     this._hostAccumulator = 0;
     this._lastPhase = 'play';
+    this.lastHostTickMs = 0;
+    this.lastUp = { drop: false, delayMs: 0 };
+    this.lastDown = { drop: false, delayMs: 0 };
 
     if (predictive) {
       this.client = new PredictionClient({
@@ -81,6 +84,8 @@ export class Lane {
    * @param {{ toHost?: { drop?: boolean, delayMs?: number }, toClient?: { drop?: boolean, delayMs?: number } }} [rolls]
    */
   update(dt, input, rolls = {}) {
+    this.lastUp = rolls.toHost ?? this.lastUp;
+    this.lastDown = rolls.toClient ?? this.lastDown;
     if (this.predictive) {
       const { seq } = this.client.applyLocalInput(input, dt);
       this.link.toHost.send({ seq, input }, rolls.toHost);
@@ -89,15 +94,19 @@ export class Lane {
     }
 
     this._hostAccumulator += dt;
+    let tickWall = 0;
     while (this._hostAccumulator >= HOST_TICK_MS) {
       const hostState = this.host.state;
       if (hostState.phase === 'play') {
         this.host.receiveInput('p2', this._botSeq++, thinkBot(hostState));
       }
+      const t0 = performance.now();
       const snapshot = this.host.tick(HOST_TICK_MS);
+      tickWall = Math.max(tickWall, performance.now() - t0);
       this.link.toClient.send(snapshot, rolls.toClient);
       this._hostAccumulator -= HOST_TICK_MS;
     }
+    this.lastHostTickMs = tickWall;
   }
 
   /**
@@ -127,6 +136,23 @@ export class Lane {
 
   get interpolationDelayMs() {
     return this.predictive ? this.remoteP2.delayMs : 0;
+  }
+
+  /** Snapshot of queues / tick cost / interpolator health for the lab probe. */
+  getTelemetry(frameMs, shadowGap) {
+    return {
+      frameMs,
+      hostTickMs: this.lastHostTickMs,
+      hostBacklog: this._hostAccumulator,
+      pending: this.pendingInputCount,
+      shadowGap: shadowGap ?? 0,
+      correctionPx: Math.hypot(this.smoother.ox, this.smoother.oy),
+      interpStatus: this.predictive ? this.remoteP2.lastStatus : 'hold',
+      dropUp: Boolean(this.lastUp?.drop),
+      dropDown: Boolean(this.lastDown?.drop),
+      upDelayMs: this.lastUp?.drop ? 0 : this.lastUp?.delayMs ?? 0,
+      downDelayMs: this.lastDown?.drop ? 0 : this.lastDown?.delayMs ?? 0,
+    };
   }
 }
 

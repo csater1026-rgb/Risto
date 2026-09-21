@@ -35,6 +35,7 @@ test('clamps to the newest snapshot when render time is after it', () => {
   interp.push(0, 1000);
   interp.push(10, 1100);
   assert.equal(interp.sample(1300, lerp), 10); // renderTime = 1200, after buffer
+  assert.equal(interp.lastStatus, 'underrun');
 });
 
 test('push ignores a stale, out-of-order snapshot instead of corrupting the buffer', () => {

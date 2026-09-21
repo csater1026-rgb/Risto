@@ -66,7 +66,22 @@
   .sliders output{color:var(--ink);font-family:var(--mono);font-size:12px}
   .sliders input[type=range]{accent-color:var(--accent);width:132px}
 
-  .hint{color:var(--ink-faint);font-size:12.5px;margin:0 0 12px}
+  .lab{
+    display:grid;grid-template-columns:repeat(6,1fr);gap:8px;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:10px 12px;margin:0 0 14px;
+  }
+  @media(max-width:900px){ .lab{grid-template-columns:repeat(3,1fr)} }
+  .lab div{min-width:0}
+  .lab .k{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
+  .lab .v{font-family:var(--mono);font-size:12.5px;color:var(--ink);margin-top:2px}
+  .lab .feel .v{color:var(--good);font-weight:700}
+  .lab-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:-6px 0 14px}
+  .lab-actions p{margin:0;color:var(--ink-faint);font-size:12px;max-width:70ch}
+  button.btn.tiny{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    padding:6px 10px;font-size:12px;font-weight:650;
+  }
 
   .lanes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:800px){ .lanes{grid-template-columns:1fr} .hero h2{font-size:26px} }
@@ -204,6 +219,19 @@
   </div>
   <p class="hint" id="hint">WASD/arrows to move, Space to dash. Same input, same fake network. The hollow disc is your shadow — the world hits that, not your pixels.</p>
 
+  <div class="lab" id="lab" aria-label="Netcode lab">
+    <div><div class="k">Network</div><div class="v" id="labNet">—</div></div>
+    <div><div class="k">Path</div><div class="v" id="labPath">—</div></div>
+    <div><div class="k">Queues</div><div class="v" id="labQueue">—</div></div>
+    <div><div class="k">Host tick</div><div class="v" id="labHost">—</div></div>
+    <div><div class="k">Render</div><div class="v" id="labRender">—</div></div>
+    <div class="feel"><div class="k">Feel</div><div class="v" id="labFeel">—</div></div>
+  </div>
+  <div class="lab-actions">
+    <p>One probe, six layers: injected network, uplink/downlink path, input queues, host tick cost, interpolator health, Shadow Body gap. Synthetic gym — not real BGP or a GPU profiler.</p>
+    <button class="btn tiny" id="copyProbe" type="button">Copy lab report</button>
+  </div>
+
   <div class="lanes">
     <div class="lane naive">
       <header class="lh">
@@ -290,7 +318,7 @@
 <script type="module">
   import { Lane } from './lane.js';
   import { createRenderer } from './render.js';
-  import { rollDelivery } from '../src/index.js';
+  import { rollDelivery, ProbeSampler } from '../src/index.js';
 
   const laneNaive = new Lane({ predictive: false });
   const laneRisto = new Lane({ predictive: true });
@@ -308,6 +336,9 @@
   const statRisto = document.getElementById('statRisto');
   const statPlay = document.getElementById('statPlay');
 
+  const probe = new ProbeSampler({ window: 240 });
+  let lastLab = 0;
+  let lastReport = null;
   const PRO_KEY = 'risto.pro';
   let pro = localStorage.getItem(PRO_KEY) === '1';
   let showShadow = true;
@@ -431,10 +462,44 @@
     statRisto.textContent = ristoLine;
     statPlay.textContent = ristoLine;
 
-    window.__ristoDebugState = { naive: naiveState, risto: ristoState };
+    probe.record(laneRisto.getTelemetry(dt, ristoState.shadowGap ?? 0));
+    if (now - lastLab > 250) {
+      lastLab = now;
+      lastReport = probe.report({ ...c, transport: 'loopback' });
+      paintLab(lastReport);
+    }
+
+    window.__ristoDebugState = { naive: naiveState, risto: ristoState, lab: lastReport };
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+
+  function paintLab(report) {
+    document.getElementById('labNet').textContent =
+      `${report.network.latencyMs} ms · loss ${Math.round(report.network.lossRate * 100)}%`;
+    document.getElementById('labPath').textContent =
+      `↑${Math.round(report.routing.uplinkMs.avg)} / ↓${Math.round(report.routing.downlinkMs.avg)} ms`;
+    document.getElementById('labQueue').textContent =
+      `${Math.round(report.queueing.pendingInputs.p50)} pending${report.queueing.healthy ? '' : ' !'}`;
+    document.getElementById('labHost').textContent =
+      `${report.server.tickMs.p95.toFixed(2)} ms p95`;
+    document.getElementById('labRender').textContent =
+      `${Math.round(report.rendering.frameMs.p50)} ms · ${(report.rendering.blendRate * 100).toFixed(0)}% blend`;
+    document.getElementById('labFeel').textContent = `${report.feel.score}`;
+  }
+
+  document.getElementById('copyProbe').addEventListener('click', async () => {
+    const report = lastReport ?? probe.report({ ...conditions(), transport: 'loopback' });
+    const text = JSON.stringify(report, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      document.getElementById('copyProbe').textContent = 'Copied';
+      setTimeout(() => { document.getElementById('copyProbe').textContent = 'Copy lab report'; }, 1200);
+    } catch {
+      console.log(text);
+      document.getElementById('copyProbe').textContent = 'Logged to console';
+    }
+  });
 
   const modal = document.getElementById('proModal');
   document.getElementById('unlockPro').addEventListener('click', () => {
