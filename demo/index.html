@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Risto — Duel. Play the split.</title>
+<link rel="icon" href="./favicon.png" type="image/png" />
 <style>
   :root{
     --bg:#07090c;
@@ -34,9 +35,14 @@
     display:flex;align-items:center;justify-content:space-between;gap:16px;
     padding:18px 0 8px;
   }
-  .brand{display:flex;align-items:baseline;gap:10px}
-  .brand h1{margin:0;font-size:20px;letter-spacing:.18em;font-weight:800}
-  .brand span{color:var(--ink-faint);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+  .brand{display:flex;align-items:center;gap:14px}
+  .brand a.logo{
+    display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none;
+  }
+  .brand a.logo:hover{text-decoration:none}
+  .brand img{height:40px;width:auto;display:block}
+  .brand .word{margin:0;font-size:18px;letter-spacing:.22em;font-weight:800;line-height:1;color:var(--ink)}
+  .brand .tag{color:var(--ink-faint);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
   .top-links{display:flex;gap:14px;font-size:13px;color:var(--ink-dim)}
 
   .hero{padding:8px 0 18px;max-width:720px}
@@ -165,8 +171,11 @@
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <h1>RISTO</h1>
-      <span>netcode engine</span>
+      <a class="logo" href="./index.html" aria-label="Ristro">
+        <img src="./risto-mark.png" alt="" width="57" height="40" />
+        <span class="word">RISTRO</span>
+      </a>
+      <span class="tag">netcode engine</span>
     </div>
     <nav class="top-links">
       <a href="https://github.com/csater1026-rgb/Risto">GitHub</a>

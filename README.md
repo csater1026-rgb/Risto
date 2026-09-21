@@ -1,5 +1,9 @@
 # Risto
 
+<p align="center">
+  <img src="demo/risto-logo.png" alt="Ristro" width="220" />
+</p>
+
 Client-side prediction, server reconciliation, and entity interpolation for
 real-time browser games — the same techniques competitive multiplayer games
 (Counter-Strike, Overwatch, Rocket League) use to hide network latency,

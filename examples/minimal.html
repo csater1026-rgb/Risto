@@ -7,6 +7,9 @@
 <style>
   body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: #0b0f14; color: #dce6f0; }
   main { max-width: 640px; margin: 0 auto; padding: 20px; }
+  .brand { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
+  .brand img { height:36px; width:auto; display:block; }
+  .brand .word { font-size:16px; letter-spacing:.22em; font-weight:800; color:#e8eef5; }
   canvas { display: block; background: #07090c; border-radius: 10px; width: 100%; height: auto; }
   p { color: #8ea0b3; }
   code { color: #5aa7ff; }
@@ -14,6 +17,10 @@
 </head>
 <body>
 <main>
+  <div class="brand">
+    <img src="../demo/risto-mark.png" alt="" width="51" height="36" />
+    <span class="word">RISTRO</span>
+  </div>
   <h1>Attach example</h1>
   <p>
     Your game is <code>simulate</code>. <code>createLoopbackSession</code> is
