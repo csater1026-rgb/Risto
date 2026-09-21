@@ -71,6 +71,24 @@ export class PredictionClient {
     return this.state;
   }
 
+  /**
+   * Explicitly resync to a fresh state and forget all history, including
+   * the out-of-order guard in `reconcile()`. That guard is intentionally
+   * strict and monotonic (it never resets itself) so a stale, reordered
+   * snapshot can never roll the client backward — but that same strictness
+   * means if the host's tick counter ever goes backward or restarts from
+   * scratch (a host process restarting, a failover to a fresh host
+   * instance), every subsequent snapshot looks "older" than what's already
+   * been applied and gets silently discarded forever. Call this once your
+   * application-level reconnect logic knows a new host session has begun.
+   * @param {unknown} state
+   */
+  reset(state) {
+    this.state = state;
+    this.history = new InputHistory();
+    this._lastReconciledTick = -1;
+  }
+
   /** Number of locally-predicted inputs still awaiting host acknowledgment. */
   get pendingInputCount() {
     return this.history.size;

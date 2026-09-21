@@ -143,6 +143,10 @@
   const keys = new Set();
   window.addEventListener('keydown', (e) => keys.add(e.key.toLowerCase()));
   window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+  // A key held down when focus is lost (alt-tab, an OS dialog stealing
+  // focus) never fires its keyup — without this the player would keep
+  // moving indefinitely after the user returns.
+  window.addEventListener('blur', () => keys.clear());
 
   function readInput() {
     let dx = 0, dy = 0;

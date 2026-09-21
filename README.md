@@ -85,12 +85,21 @@ onSnapshotReceived((snapshot) => {
 ```js
 import { RemoteInterpolator } from 'risto';
 
-const remote = new RemoteInterpolator({ delayMs: 100 });
+// delayMs must exceed the connection's actual one-way latency + jitter,
+// or sample() silently stops interpolating (it degrades to "clamp to
+// whatever arrived most recently" — the same as not interpolating at
+// all). Derive it from your measured/configured connection and keep it
+// updated with setDelayMs() if that connection changes.
+const remote = new RemoteInterpolator({ delayMs: measuredLatencyMs + jitterMs + 100 });
 
 onRemoteSnapshot((state, timestamp) => remote.push(state, timestamp));
 
-// Every render frame:
-const smoothed = remote.sample(performance.now(), (a, b, t) => ({
+// Every render frame — use Date.now(), NOT performance.now(). Snapshot
+// timestamps came from AuthoritativeHost, which stamps them with
+// Date.now(); performance.now() is relative to this page's own
+// navigation start and isn't comparable to a timestamp that crossed the
+// network.
+const smoothed = remote.sample(Date.now(), (a, b, t) => ({
   x: a.x + (b.x - a.x) * t,
   y: a.y + (b.y - a.y) * t,
 }));
@@ -144,6 +153,13 @@ npm run build   # produces dist/risto.esm.js and dist/risto.global.js
   inputs on top of the host's snapshot. It does not attempt to predict
   what other players did in that same window — that's what
   `RemoteInterpolator` is for.
+- `PredictionClient.reconcile()`'s out-of-order guard is intentionally
+  strict and never resets itself — that's what stops a stale snapshot from
+  ever rolling you backward. The tradeoff: if the host process restarts
+  (a fresh `AuthoritativeHost` starting its tick counter over), every
+  snapshot from it will look "older" than what's already been applied and
+  gets silently discarded forever. Call `client.reset(state)` once your own
+  reconnect logic knows a new host session has begun.
 
 ## License
 
