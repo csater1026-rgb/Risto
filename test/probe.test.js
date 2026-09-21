@@ -26,6 +26,7 @@ test('ProbeSampler report includes all six layers and a feel score', () => {
   assert.equal(typeof report.queueing.healthy, 'boolean');
   assert.equal(typeof report.server.onBudget, 'boolean');
   assert.ok(report.rendering.underrunRate > 0);
+  assert.equal(typeof report.rendering.extrapolateRate, 'number');
   assert.ok(report.prediction.shadowGapPx.p50 >= 20);
   assert.ok(report.feel.score >= 0 && report.feel.score <= 100);
 });
@@ -55,4 +56,8 @@ test('runProbe is deterministic with a seeded rng and shows more gap under lag',
   assert.ok(bad.queueing.pendingInputs.avg > lan.queueing.pendingInputs.avg);
   assert.ok(lan.server.onBudget);
   assert.ok(lan.feel.score >= 0);
+  assert.ok(
+    lan.rendering.blendRate > 0.2,
+    `expected the interpolator to actually blend on LAN, blendRate=${lan.rendering.blendRate}`,
+  );
 });

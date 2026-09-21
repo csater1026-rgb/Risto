@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Risto — attach example</title>
+<style>
+  body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: #0b0f14; color: #dce6f0; }
+  main { max-width: 640px; margin: 0 auto; padding: 20px; }
+  canvas { display: block; background: #07090c; border-radius: 10px; width: 100%; height: auto; }
+  p { color: #8ea0b3; }
+  code { color: #5aa7ff; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Attach example</h1>
+  <p>
+    Your game is <code>simulate</code>. <code>createLoopbackSession</code> is
+    host + prediction + interpolation + a fake network. WASD/arrows.
+    Hollow disc = Shadow Body (host pose).
+  </p>
+  <canvas id="c" width="560" height="320"></canvas>
+  <p id="hud">—</p>
+</main>
+<script type="module">
+  import { createLoopbackSession, lerpPose } from '../src/index.js';
+
+  const W = 560, H = 320, R = 16, SPEED = 220;
+  const simulate = (state, inputs, dt) => {
+    const s = dt / 1000;
+    const step = (p, inp) => {
+      if (!inp) return { ...p };
+      return {
+        x: Math.max(R, Math.min(W - R, p.x + (inp.dx ?? 0) * SPEED * s)),
+        y: Math.max(R, Math.min(H - R, p.y + (inp.dy ?? 0) * SPEED * s)),
+      };
+    };
+    return { p1: step(state.p1, inputs.p1), p2: step(state.p2, inputs.p2) };
+  };
+  const initialState = { p1: { x: 140, y: 160 }, p2: { x: 420, y: 160 } };
+  const conditions = { latencyMs: 150, jitterMs: 20, lossRate: 0.02 };
+
+  const session = createLoopbackSession({
+    simulate,
+    initialState,
+    playerId: 'p1',
+    opponentId: 'p2',
+    conditions,
+    hostTickMs: 50,
+  });
+
+  const keys = new Set();
+  addEventListener('keydown', (e) => keys.add(e.key.toLowerCase()));
+  addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+  const read = () => ({
+    dx: (keys.has('a') || keys.has('arrowleft') ? -1 : 0) + (keys.has('d') || keys.has('arrowright') ? 1 : 0),
+    dy: (keys.has('w') || keys.has('arrowup') ? -1 : 0) + (keys.has('s') || keys.has('arrowdown') ? 1 : 0),
+  });
+
+  const ctx = document.getElementById('c').getContext('2d');
+  let last = performance.now();
+  let botT = 0;
+  function frame(now) {
+    const dt = Math.min(50, now - last); last = now;
+    const input = read();
+    session.applyLocalInput(input, dt);
+    botT += dt;
+    session.stepHost(dt, { p2: { dx: Math.sin(botT / 400), dy: Math.cos(botT / 550) } });
+    const view = session.sample(Date.now(), dt / 1000, lerpPose);
+    const you = view.you;
+    const them = view.them ?? view.state.p2;
+    const hostYou = view.shadow;
+    ctx.clearRect(0, 0, W, H);
+    if (hostYou) {
+      ctx.setLineDash([4, 4]); ctx.strokeStyle = '#9cd'; ctx.beginPath();
+      ctx.arc(hostYou.x, hostYou.y, R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.fillStyle = '#ff5d7a'; ctx.beginPath(); ctx.arc(them.x, them.y, R, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5aa7ff'; ctx.beginPath(); ctx.arc(you.x, you.y, R, 0, Math.PI * 2); ctx.fill();
+    document.getElementById('hud').textContent =
+      `${view.pending} pending · shadow ${Math.round(view.shadowGap)} px · interp ${view.interpStatus}`;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>

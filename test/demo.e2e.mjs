@@ -145,7 +145,21 @@ async function main() {
     `expected the interpolated opponent to move at all over the sampling window, total movement was only ${totalMoved.toFixed(2)}px`
   );
 
+  const blendRate = await page.evaluate(() => window.__ristoDebugState?.lab?.rendering?.blendRate ?? 0);
+  assert(
+    blendRate > 0.15,
+    `expected interpolator to blend under jitter, blendRate=${blendRate}`
+  );
+
   assert(errors.length === 0, `page threw errors: ${errors.join('\n')}`);
+
+  const exampleUrl = BASE_URL.replace(/demo\/index\.html$/, 'examples/minimal.html');
+  await page.goto(exampleUrl, { waitUntil: 'load' });
+  await page.waitForFunction(
+    () => /pending/.test(document.getElementById('hud')?.textContent ?? ''),
+    { timeout: 4000 },
+  );
+  assert(errors.length === 0, `attach example threw errors: ${errors.join('\n')}`);
 
   await browser.close();
   console.log('demo.e2e.mjs: all checks passed');

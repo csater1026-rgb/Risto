@@ -69,12 +69,42 @@ import {
   RemoteInterpolator,
   CorrectionSmoother,
   ShadowBody,
+  PredictedView,        // client bundle: predict + interpolate + shadow
+  createLoopbackSession, // host + PredictedView + fake network
   createLoopbackLink,   // in-page fake network (start here)
   WebRtcTransport,      // later: real peer
   ProbeSampler,         // live lab meters in your debug HUD
   runProbe,             // CI: one report, no canvas
 } from 'risto';
 ```
+
+### Fastest path: `createLoopbackSession`
+
+Open [`examples/minimal.html`](examples/minimal.html) (static ESM, same as Duel).
+That file is the whole attach recipe: your `simulate`, one session object,
+your renderer.
+
+```js
+import { createLoopbackSession, lerpPose } from 'risto';
+
+const session = createLoopbackSession({
+  simulate,
+  initialState,
+  playerId: 'p1',
+  conditions: { latencyMs: 150, jitterMs: 20, lossRate: 0.02 },
+});
+
+function frame(dt, input, now) {
+  session.applyLocalInput(input, dt);
+  session.stepHost(dt, { p2: botInput }); // or omit if the host gets real peers
+  const { you, them, shadow, shadowGap, pending, interpStatus } =
+    session.sample(now, dt / 1000, lerpPose);
+  render({ you, them, shadow, shadowGap, pending, interpStatus });
+}
+```
+
+When you swap loopback for WebRTC, keep `PredictedView` and drop the
+session helper — `ingest(snapshot)` already stamps remotes on arrival.
 
 ### 2. Host peer (or dedicated server)
 
@@ -106,7 +136,7 @@ transport.onReceive((snapshot) => {
   client.reconcile(snapshot);
   smoother.note(prev, client.getState().p1);
   shadow.push(snapshot.state.p1, snapshot.timestamp); // hollow disc
-  remote.push(snapshot.state.p2, snapshot.timestamp); // everyone else
+  remote.push(snapshot.state.p2); // arrival clock (default Date.now())
 });
 
 function frame(now) {
@@ -155,8 +185,9 @@ test('4G still feels ok', () => {
 });
 ```
 
-Duel (`demo/`) is that recipe with two discs. Copy `demo/lane.js` if you
-want a working host+client+link in one file, then replace `simulate`.
+Duel (`demo/`) is that recipe with two discs. The copy-paste version of
+the loop is `createLoopbackSession` in `examples/minimal.html` — do not
+copy `demo/lane.js` (that file is the naive-vs-Risto comparison).
 
 ## The three pieces
 
@@ -211,10 +242,11 @@ import { RemoteInterpolator } from 'risto';
 
 const remote = new RemoteInterpolator({ delayMs: 100 });
 
-onRemoteSnapshot((state, timestamp) => remote.push(state, timestamp));
+onRemoteSnapshot((state) => remote.push(state)); // arrival time, default Date.now()
 
-// Every render frame — same clock the host stamped the snapshot with
-// (Date.now(), not performance.now()).
+// Every render frame — same clock you stamped `push` with (Date.now()).
+// Do not pass the host's send stamp after a delayed hop: `now - delayMs`
+// will sit ahead of the buffer and sample() will never blend.
 const smoothed = remote.sample(Date.now(), (a, b, t) => ({
   x: a.x + (b.x - a.x) * t,
   y: a.y + (b.y - a.y) * t,

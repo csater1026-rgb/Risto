@@ -1,9 +1,10 @@
 export { InputHistory } from './input-history.js';
 export { PredictionClient } from './prediction-client.js';
 export { AuthoritativeHost } from './authoritative-host.js';
-export { RemoteInterpolator } from './interpolator.js';
+export { RemoteInterpolator, interpolationDelayMs, lerpPose } from './interpolator.js';
 export { CorrectionSmoother } from './correction-smoother.js';
 export { ShadowBody } from './shadow-body.js';
+export { PredictedView, createLoopbackSession } from './session.js';
 export { ProbeSampler, runProbe, mulberry32, summarize, percentile } from './probe.js';
 export { NetworkLink, createLoopbackLink, rollDelivery } from './network-link.js';
 export { WebRtcTransport, HttpPollingSignaling } from './webrtc-transport.js';

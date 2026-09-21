@@ -13,10 +13,8 @@
  */
 
 import { AuthoritativeHost } from './authoritative-host.js';
-import { PredictionClient } from './prediction-client.js';
-import { RemoteInterpolator } from './interpolator.js';
-import { CorrectionSmoother } from './correction-smoother.js';
-import { ShadowBody } from './shadow-body.js';
+import { interpolationDelayMs, lerpPose } from './interpolator.js';
+import { PredictedView } from './session.js';
 import { rollDelivery } from './network-link.js';
 
 export function percentile(values, p) {
@@ -66,9 +64,11 @@ export class ProbeSampler {
     const dropsDown = s.filter((row) => row.dropDown).length;
     const underruns = s.filter((row) => row.interpStatus === 'underrun').length;
     const blends = s.filter((row) => row.interpStatus === 'blend').length;
+    const extrapolates = s.filter((row) => row.interpStatus === 'extrapolate').length;
     const latencyMs = fixture.latencyMs ?? 0;
+    const tickSamples = s.map((row) => Number(row.hostTickMs ?? 0)).filter((v) => v > 0);
     const frameMs = summarize(nums('frameMs'));
-    const tickMs = summarize(nums('hostTickMs'));
+    const tickMs = summarize(tickSamples);
     const pending = summarize(nums('pending'));
     const gap = summarize(nums('shadowGap'));
     const correction = summarize(nums('correctionPx'));
@@ -110,13 +110,14 @@ export class ProbeSampler {
       },
       server: {
         tickMs,
-        hitchCount: s.filter((row) => row.hostTickMs > 8).length,
-        onBudget: tickMs.p95 < 8,
+        hitchCount: tickSamples.filter((v) => v > 8).length,
+        onBudget: tickMs.n === 0 || tickMs.p95 < 8,
       },
       rendering: {
         frameMs,
         underrunRate: round(underrunRate, 4),
         blendRate: round(blendRate, 4),
+        extrapolateRate: round(s.length ? extrapolates / s.length : 0, 4),
         interpStatus: s.length ? s[s.length - 1].interpStatus : 'empty',
       },
       prediction: {
@@ -147,7 +148,7 @@ export class ProbeSampler {
  *   inputAt?: (t: number, state: unknown) => unknown,
  *   opponentAt?: (t: number, state: unknown) => unknown,
  *   rng?: () => number,
- *   getPos?: (state: unknown, id: string) => { x: number, y: number } | null,
+ *   lerp?: (a: unknown, b: unknown, t: number) => unknown,
  * }} opts
  */
 export function runProbe(opts) {
@@ -161,8 +162,7 @@ export function runProbe(opts) {
   const inputAt = opts.inputAt ?? (() => ({}));
   const opponentAt = opts.opponentAt ?? (() => ({}));
   const rng = opts.rng ?? Math.random;
-  const getPos = opts.getPos ?? defaultGetPos;
-  const lerp = opts.lerp ?? lerpXY;
+  const lerp = opts.lerp ?? lerpPose;
 
   let clock = 1_000_000;
   const host = new AuthoritativeHost({
@@ -170,16 +170,14 @@ export function runProbe(opts) {
     initialState: opts.initialState,
     now: () => clock,
   });
-  const client = new PredictionClient({
+  const view = new PredictedView({
     simulate,
     playerId,
+    opponentId,
     initialState: opts.initialState,
+    delayMs: interpolationDelayMs(hostTickMs, conditions.jitterMs ?? 0),
   });
-  const remote = new RemoteInterpolator({
-    delayMs: Math.max(hostTickMs * 2, hostTickMs + (conditions.jitterMs ?? 0) + 20),
-  });
-  const smoother = new CorrectionSmoother();
-  const shadow = new ShadowBody();
+  const client = view.client;
   const up = new Mailbox();
   const down = new Mailbox();
   const sampler = new ProbeSampler({ window: 10_000 });
@@ -210,20 +208,10 @@ export function runProbe(opts) {
       hostAcc -= hostTickMs;
     }
     down.drain(clock, (snapshot) => {
-      const prev = getPos(client.getState(), playerId);
-      client.reconcile(snapshot);
-      const next = getPos(client.getState(), playerId);
-      if (prev && next) smoother.note(prev, next);
-      const pose = getPos(snapshot.state, playerId);
-      if (pose) shadow.push(pose, snapshot.timestamp);
-      const them = getPos(snapshot.state, opponentId);
-      if (them) remote.push(them, snapshot.timestamp);
+      view.ingest(snapshot, clock);
     });
 
-    const predicted = getPos(client.getState(), playerId);
-    const drawn = predicted ? smoother.apply(predicted, frameMs / 1000) : null;
-    remote.sample(clock, lerp);
-    const hostPose = shadow.sample();
+    const drawn = view.sample(clock, frameMs / 1000, lerp);
     const frameWall = nowNs() - t0;
 
     sampler.record({
@@ -231,9 +219,9 @@ export function runProbe(opts) {
       hostTickMs: tickWall,
       hostBacklog: hostAcc,
       pending: client.pendingInputCount,
-      shadowGap: ShadowBody.gap(drawn, hostPose),
-      correctionPx: Math.hypot(smoother.ox, smoother.oy),
-      interpStatus: remote.lastStatus,
+      shadowGap: drawn.shadowGap,
+      correctionPx: Math.hypot(view.smoother.ox, view.smoother.oy),
+      interpStatus: view.remote.lastStatus,
       dropUp: toHost.drop,
       dropDown: lastDown.drop,
       upDelayMs: toHost.drop ? 0 : toHost.delayMs,
@@ -250,15 +238,17 @@ export function runProbe(opts) {
 
 function feelScore(report) {
   const underrun = 100 - Math.min(100, report.rendering.underrunRate * 400);
+  const blend = Math.min(100, (report.rendering.blendRate ?? 0) * 100);
+  const interpolator = underrun * 0.45 + blend * 0.55;
   const correction = 100 - Math.min(40, report.prediction.correctionPx.p95 * 1.5);
   const queues = report.queueing.healthy ? 100 : 55;
   const server = report.server.onBudget ? 100 : 60;
   const frames = report.rendering.frameMs.p95 < 24 ? 100 : 70;
-  const feel = underrun * 0.25 + correction * 0.25 + queues * 0.2 + server * 0.15 + frames * 0.15;
+  const feel = interpolator * 0.25 + correction * 0.25 + queues * 0.2 + server * 0.15 + frames * 0.15;
   return {
     score: Math.round(feel),
     parts: {
-      interpolator: Math.round(underrun),
+      interpolator: Math.round(interpolator),
       corrections: Math.round(correction),
       queues: Math.round(queues),
       server: Math.round(server),
@@ -284,17 +274,6 @@ class Mailbox {
     }
     if (i) this.q.splice(0, i);
   }
-}
-
-function defaultGetPos(state, id) {
-  if (!state || typeof state !== 'object') return null;
-  const body = state[id];
-  if (body && typeof body.x === 'number' && typeof body.y === 'number') return body;
-  return null;
-}
-
-function lerpXY(a, b, t) {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
 function round(n, d) {

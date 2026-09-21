@@ -1,10 +1,8 @@
 import {
   AuthoritativeHost,
-  PredictionClient,
-  RemoteInterpolator,
-  CorrectionSmoother,
-  ShadowBody,
+  PredictedView,
   createLoopbackLink,
+  interpolationDelayMs,
 } from '../src/index.js';
 import { simulate, createInitialState } from './simulate.js';
 import { thinkBot } from './bot.js';
@@ -26,24 +24,24 @@ export class Lane {
       initialState: createInitialState(),
     });
     this.link = createLoopbackLink();
-    this.smoother = new CorrectionSmoother();
-    this.shadow = new ShadowBody();
     this._botSeq = 0;
     this._nextSeq = 0;
     this._hostAccumulator = 0;
-    this._lastPhase = 'play';
     this.lastHostTickMs = 0;
     this.lastUp = { drop: false, delayMs: 0 };
     this.lastDown = { drop: false, delayMs: 0 };
 
     if (predictive) {
-      this.client = new PredictionClient({
+      this.view = new PredictedView({
         simulate,
         playerId: 'p1',
+        opponentId: 'p2',
         initialState: createInitialState(),
       });
-      this.remoteP2 = new RemoteInterpolator({ delayMs: 100 });
+      this.smoother = this.view.smoother;
     } else {
+      this.view = null;
+      this.smoother = { ox: 0, oy: 0 };
       this.naiveState = createInitialState();
     }
 
@@ -52,13 +50,11 @@ export class Lane {
     });
 
     this.link.toClient.onReceive((snapshot) => {
-      if (this.predictive) {
-        const prev = this.client.getState().p1;
-        this.client.reconcile(snapshot);
-        this.smoother.note(prev, this.client.getState().p1);
-        this.shadow.push(snapshot.state.p1, snapshot.timestamp);
-        this.remoteP2.push(snapshot.state.p2, snapshot.timestamp);
-        if (snapshot.state.phase !== 'play') this.smoother.reset();
+      if (this.view) {
+        // Arrival stamps live in PredictedView.ingest — snapshot.timestamp
+        // is send-time and would underrun the interpolator under lag.
+        this.view.ingest(snapshot);
+        if (snapshot.state.phase !== 'play') this.view.smoother.reset();
       } else {
         this.naiveState = snapshot.state;
       }
@@ -68,13 +64,8 @@ export class Lane {
   setNetworkConditions(conditions) {
     this.link.toHost.setConditions(conditions);
     this.link.toClient.setConditions(conditions);
-    if (this.predictive) {
-      // Stay ahead of one snapshot + jitter so sample() has two brackets
-      // to blend, even when the "network" is being unpleasant.
-      this.remoteP2.delayMs = Math.max(
-        HOST_TICK_MS * 2,
-        HOST_TICK_MS + (conditions.jitterMs ?? 0) + 20,
-      );
+    if (this.view) {
+      this.view.setDelay(interpolationDelayMs(HOST_TICK_MS, conditions.jitterMs ?? 0));
     }
   }
 
@@ -86,8 +77,8 @@ export class Lane {
   update(dt, input, rolls = {}) {
     this.lastUp = rolls.toHost ?? this.lastUp;
     this.lastDown = rolls.toClient ?? this.lastDown;
-    if (this.predictive) {
-      const { seq } = this.client.applyLocalInput(input, dt);
+    if (this.view) {
+      const { seq } = this.view.applyLocalInput(input, dt);
       this.link.toHost.send({ seq, input }, rolls.toHost);
     } else {
       this.link.toHost.send({ seq: this._nextSeq++, input }, rolls.toHost);
@@ -106,36 +97,35 @@ export class Lane {
       this.link.toClient.send(snapshot, rolls.toClient);
       this._hostAccumulator -= HOST_TICK_MS;
     }
-    this.lastHostTickMs = tickWall;
+    // Frames that didn't tick must not overwrite the last real measurement
+    // with 0 — that made the lab's host p95 look like 0.00 ms forever.
+    if (tickWall > 0) this.lastHostTickMs = Math.max(tickWall, 0.001);
   }
 
   /**
-   * @param {number} now Date.now()-based, matching AuthoritativeHost stamps
+   * @param {number} now Date.now()-based, matching interpolator arrival stamps
    * @param {number} [dtSeconds]
    */
   getRenderState(now, dtSeconds = 1 / 60) {
-    if (this.predictive) {
-      const clientState = this.client.getState();
-      const p1 = this.smoother.apply(clientState.p1, dtSeconds);
-      const p2 = this.remoteP2.sample(now, lerpBody) ?? clientState.p2;
-      const shadow = this.shadow.sample();
+    if (this.view) {
+      const sampled = this.view.sample(now, dtSeconds, lerpBody);
       return {
-        ...clientState,
-        p1,
-        p2,
-        shadow,
-        shadowGap: ShadowBody.gap(p1, shadow),
+        ...sampled.state,
+        p1: sampled.you,
+        p2: sampled.them ?? sampled.state.p2,
+        shadow: sampled.shadow,
+        shadowGap: sampled.shadowGap,
       };
     }
     return this.naiveState;
   }
 
   get pendingInputCount() {
-    return this.predictive ? this.client.pendingInputCount : 0;
+    return this.view ? this.view.client.pendingInputCount : 0;
   }
 
   get interpolationDelayMs() {
-    return this.predictive ? this.remoteP2.delayMs : 0;
+    return this.view ? this.view.remote.delayMs : 0;
   }
 
   /** Snapshot of queues / tick cost / interpolator health for the lab probe. */
@@ -147,7 +137,7 @@ export class Lane {
       pending: this.pendingInputCount,
       shadowGap: shadowGap ?? 0,
       correctionPx: Math.hypot(this.smoother.ox, this.smoother.oy),
-      interpStatus: this.predictive ? this.remoteP2.lastStatus : 'hold',
+      interpStatus: this.view ? this.view.remote.lastStatus : 'hold',
       dropUp: Boolean(this.lastUp?.drop),
       dropDown: Boolean(this.lastDown?.drop),
       upDelayMs: this.lastUp?.drop ? 0 : this.lastUp?.delayMs ?? 0,

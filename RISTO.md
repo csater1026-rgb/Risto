@@ -83,8 +83,21 @@ Monotonic `tick` on every snapshot.
 
 **`RemoteInterpolator`** — render remotes in the past, blend between
 the two snapshots that bracket render time. `push`/`sample` must share
-a clock; host stamps `Date.now()`, so the demo samples with `Date.now()`
-too. Never mix in `performance.now()`. Out-of-order pushes are dropped.
+a clock. On a delayed transport, stamp `push` with **arrival** time, not
+the host send stamp — send stamps plus a short delayMs sit in the future
+relative to the buffer and `sample()` underruns (never blends).
+`push(state)` already defaults to `Date.now()`. Never mix in
+`performance.now()`. Out-of-order pushes are dropped. When the buffer
+runs dry, a short extrapolation (capped by `maxExtrapolateMs` and one
+snapshot span) coasts instead of freezing; `lastStatus` is
+`empty|hold|blend|extrapolate|underrun`. Use
+`interpolationDelayMs(hostTickMs, jitterMs)` for the buffer depth.
+
+**`PredictedView` / `createLoopbackSession`** — the attach recipe.
+`PredictedView` is predict-you + interpolate-them + correction smoother +
+Shadow Body. `createLoopbackSession` wires that to an `AuthoritativeHost`
+through loopback. Duel's compare lane still owns two hosts (naive vs
+Risto); new games should start at `examples/minimal.html`.
 
 **`CorrectionSmoother`** — Valve-style error carry. Simulation snaps;
 pixels ease. Distances ≥ `snapDistance` (round resets) snap.
@@ -120,10 +133,6 @@ toward the rim.
 - The hollow disc on the Risto lane is `ShadowBody` — where the host
   thinks you are. Toggle with the Shadow chip. Naive has no split
   (you *are* the delayed body).
-
-- You are p1. A deterministic host-side bot is p2 (real inputs into the
-  sim, not a scripted overlay). Collision and knock-out live in
-  `simulate`, so they reconcile.
 - **Compare** mode: naive lane vs Risto lane, coupled network rolls.
 - **Play** mode: the Risto lane full-width. Same sim.
 - Network presets (LAN / Wi-Fi / 4G / Bad) plus sliders.
@@ -169,12 +178,11 @@ later, label it experimental and keep loopback one click away.
 ## Tests
 
 - `npm test` — `InputHistory`, `PredictionClient` + `AuthoritativeHost`,
-  `RemoteInterpolator`, `NetworkLink` / `rollDelivery`,
-  `CorrectionSmoother`, Duel `simulate`.
-- `node test/demo.e2e.mjs` — Playwright against `demo/index.html`.
-  Checks: page boots, sliders apply, predicted inputs queue under
-  latency, backlog drains, interpolated opponent moves smoothly
-  (max per-step distance, not just net displacement).
+  `RemoteInterpolator`, `PredictedView` / `createLoopbackSession`,
+  `NetworkLink` / `rollDelivery`, `CorrectionSmoother`, `runProbe`,
+  Duel `simulate`.
+- `node test/demo.e2e.mjs` — Playwright against `demo/index.html` and
+  `examples/minimal.html`.
 
 ---
 
