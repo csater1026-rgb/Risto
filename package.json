@@ -17,7 +17,8 @@
   "scripts": {
     "build": "node build.js",
     "prepare": "node build.js",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "signal": "node scripts/signal-server.js"
   },
   "keywords": [
     "netcode",

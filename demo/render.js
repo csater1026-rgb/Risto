@@ -6,6 +6,23 @@ const YOU_GLOW = 'rgba(90, 167, 255, 0.55)';
 const BOT_GLOW = 'rgba(255, 93, 122, 0.5)';
 const SHADOW = 'rgba(180, 220, 255, 0.9)';
 
+function orientState(state, localId) {
+  if (!state || localId !== 'p2') return state;
+  const lastKo =
+    state.lastKo === 'p1' ? 'p2' :
+    state.lastKo === 'p2' ? 'p1' :
+    state.lastKo;
+  return {
+    ...state,
+    p1: state.p2,
+    p2: state.p1,
+    scores: state.scores
+      ? { p1: state.scores.p2, p2: state.scores.p1 }
+      : state.scores,
+    lastKo,
+  };
+}
+
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   const trails = { p1: [], p2: [] };
@@ -16,22 +33,30 @@ export function createRenderer(canvas) {
   let clashRing = 0;
 
   return {
-    draw(state, { now, pro = false, labels = true, showShadow = true } = {}) {
+    draw(state, {
+      now,
+      pro = false,
+      labels = true,
+      showShadow = true,
+      localId = 'p1',
+      opponentTag = 'BOT',
+    } = {}) {
       if (!state) return;
-      if (state.hit && state.t !== lastHit) {
-        shake = state.clash ? 12 : 7;
-        flash = state.clash ? 1 : 0.7;
-        clashRing = state.clash ? 1 : 0;
-        lastHit = state.t;
+      const view = orientState(state, localId);
+      if (view.hit && view.t !== lastHit) {
+        shake = view.clash ? 12 : 7;
+        flash = view.clash ? 1 : 0.7;
+        clashRing = view.clash ? 1 : 0;
+        lastHit = view.t;
       }
-      if (state.phase === 'ko' && state.lastKo && state.lastKo !== lastKo) {
+      if (view.phase === 'ko' && view.lastKo && view.lastKo !== lastKo) {
         shake = 11;
         flash = 1;
       }
-      lastKo = state.phase === 'ko' ? state.lastKo : null;
+      lastKo = view.phase === 'ko' ? view.lastKo : null;
 
-      pushTrail(trails.p1, state.p1);
-      pushTrail(trails.p2, state.p2);
+      pushTrail(trails.p1, view.p1);
+      pushTrail(trails.p2, view.p2);
 
       const sx = (Math.random() - 0.5) * shake;
       const sy = (Math.random() - 0.5) * shake;
@@ -45,25 +70,25 @@ export function createRenderer(canvas) {
       ctx.translate(sx, sy);
 
       drawBackdrop(ctx, pro);
-      drawRing(ctx, state, pro);
-      drawCurrent(ctx, state.t);
-      if (showShadow && state.shadow) {
-        drawLink(ctx, state.p1, state.shadow);
-        drawShadow(ctx, state.shadow);
+      drawRing(ctx, view, pro);
+      drawCurrent(ctx, view.t);
+      if (showShadow && view.shadow) {
+        drawLink(ctx, view.p1, view.shadow);
+        drawShadow(ctx, view.shadow);
       }
       drawTrails(ctx, trails.p1, YOU);
       drawTrails(ctx, trails.p2, BOT);
-      drawPlayer(ctx, state.p2, BOT, BOT_GLOW, isOut(state.p2));
-      drawPlayer(ctx, state.p1, YOU, YOU_GLOW, isOut(state.p1), state.p1.dashCd > 500);
-      if (clashRing > 0.08 && state.p1 && state.p2) {
-        drawClash(ctx, state.p1, state.p2, clashRing);
+      drawPlayer(ctx, view.p2, BOT, BOT_GLOW, isOut(view.p2));
+      drawPlayer(ctx, view.p1, YOU, YOU_GLOW, isOut(view.p1), view.p1.dashCd > 500);
+      if (clashRing > 0.08 && view.p1 && view.p2) {
+        drawClash(ctx, view.p1, view.p2, clashRing);
       }
       if (labels) {
-        drawTag(ctx, state.p1, 'YOU', YOU);
-        drawTag(ctx, state.p2, 'BOT', BOT);
+        drawTag(ctx, view.p1, 'YOU', YOU);
+        drawTag(ctx, view.p2, opponentTag, BOT);
       }
-      drawHud(ctx, state, showShadow);
-      drawBanner(ctx, state, now);
+      drawHud(ctx, view, showShadow);
+      drawBanner(ctx, view, now, opponentTag);
       if (flash > 0.05) {
         ctx.fillStyle = `rgba(255, 230, 200, ${0.08 * flash})`;
         ctx.fillRect(0, 0, ARENA.width, ARENA.height);
@@ -257,7 +282,7 @@ function drawHud(ctx, state, showShadow) {
   }
 }
 
-function drawBanner(ctx, state, now) {
+function drawBanner(ctx, state, now, opponentTag = 'BOT') {
   if (state.phase === 'countdown') {
     const n = Math.max(1, Math.ceil((COUNTDOWN_MS - state.phaseT) / 250));
     banner(ctx, String(n), 'rgba(230, 237, 243, 0.92)');
@@ -266,7 +291,7 @@ function drawBanner(ctx, state, now) {
   if (state.phase === 'ko') {
     const text =
       state.lastKo === 'p1' ? "YOU'RE OUT" :
-      state.lastKo === 'p2' ? 'BOT OUT' :
+      state.lastKo === 'p2' ? (opponentTag === 'THEM' ? 'THEM OUT' : 'BOT OUT') :
       'DOUBLE OUT';
     const color = state.lastKo === 'p2' ? YOU : BOT;
     banner(ctx, text, color);

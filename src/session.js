@@ -249,6 +249,154 @@ export function createLoopbackSession({
   };
 }
 
+/**
+ * Listen-server over any `send` / `onReceive` transport (WebRTC, a socket,
+ * or a test mailbox). Host is p1 and ticks the sim. The other peer is p2
+ * and predicts. `simulate` does not change.
+ *
+ * @param {{
+ *   simulate: Function,
+ *   initialState: unknown,
+ *   role: 'host' | 'client',
+ *   transport: { send: (msg: unknown) => void, onReceive: (handler: (msg: unknown) => void) => void },
+ *   hostTickMs?: number,
+ *   delayMs?: number,
+ *   now?: () => number,
+ * }} opts
+ */
+export function createPeerSession({
+  simulate,
+  initialState,
+  role,
+  transport,
+  hostTickMs = 50,
+  delayMs,
+  now = () => Date.now(),
+}) {
+  const playerId = role === 'host' ? 'p1' : 'p2';
+  const opponentId = role === 'host' ? 'p2' : 'p1';
+  const view = new PredictedView({
+    simulate,
+    playerId,
+    opponentId,
+    initialState,
+    delayMs: delayMs ?? interpolationDelayMs(hostTickMs, 20),
+  });
+  const host = role === 'host'
+    ? new AuthoritativeHost({ simulate, initialState, now })
+    : null;
+  let acc = 0;
+  let lastHostTickMs = 0;
+  let rttMs = 0;
+  let lastPingAt = 0;
+
+  transport.onReceive((msg) => {
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.kind === 'input' && host && msg.playerId !== playerId) {
+      host.receiveInput(opponentId, msg.seq, msg.input);
+      return;
+    }
+    if (msg.kind === 'snapshot' && role === 'client' && msg.snapshot) {
+      view.ingest(msg.snapshot);
+      return;
+    }
+    if (msg.kind === 'ping' && role === 'host') {
+      transport.send({ kind: 'pong', t: msg.t });
+      return;
+    }
+    if (msg.kind === 'pong' && typeof msg.t === 'number') {
+      rttMs = Math.max(0, Date.now() - msg.t);
+    }
+  });
+
+  return {
+    role,
+    playerId,
+    opponentId,
+    view,
+    host,
+    hostTickMs,
+    get lastHostTickMs() {
+      return lastHostTickMs;
+    },
+    get rttMs() {
+      return rttMs;
+    },
+
+    applyLocalInput(input, dt) {
+      const { seq } = view.applyLocalInput(input, dt);
+      if (host) host.receiveInput(playerId, seq, input);
+      else transport.send({ kind: 'input', playerId, seq, input });
+      return seq;
+    },
+
+    step(dt) {
+      if (role === 'client') {
+        const t = Date.now();
+        if (t - lastPingAt > 1000) {
+          lastPingAt = t;
+          transport.send({ kind: 'ping', t });
+        }
+        return;
+      }
+      acc += dt;
+      let tickWall = 0;
+      while (acc >= hostTickMs) {
+        const t0 = nowNs();
+        const snapshot = host.tick(hostTickMs);
+        tickWall = Math.max(tickWall, nowNs() - t0);
+        view.ingest(snapshot);
+        transport.send({ kind: 'snapshot', snapshot });
+        acc -= hostTickMs;
+      }
+      if (tickWall > 0) lastHostTickMs = Math.max(tickWall, 0.001);
+    },
+
+    sample(nowClock, dtSeconds, interpolate) {
+      return view.sample(nowClock, dtSeconds, interpolate);
+    },
+
+    renderState(sampled) {
+      if (host) {
+        const live = host.state ?? {};
+        return {
+          ...live,
+          [playerId]: sampled.you ?? live[playerId],
+          shadow: sampled.shadow,
+          shadowGap: sampled.shadowGap,
+        };
+      }
+      const state = sampled.state ?? {};
+      const them = sampled.them ?? poseOf(state, opponentId);
+      const next = {
+        ...state,
+        shadow: sampled.shadow,
+        shadowGap: sampled.shadowGap,
+      };
+      if (sampled.you) next[playerId] = sampled.you;
+      if (them) next[opponentId] = them;
+      return next;
+    },
+
+    telemetry(frameMs, shadowGap) {
+      const you = poseOf(view.client.getState(), playerId);
+      return {
+        frameMs,
+        hostTickMs: lastHostTickMs,
+        hostBacklog: acc,
+        pending: view.client.pendingInputCount,
+        shadowGap: shadowGap ?? ShadowBody.gap(you, view.shadow.sample()),
+        correctionPx: Math.hypot(view.smoother.ox, view.smoother.oy),
+        interpStatus: view.remote.lastStatus,
+        dropUp: false,
+        dropDown: false,
+        upDelayMs: rttMs / 2,
+        downDelayMs: rttMs / 2,
+      };
+    },
+  };
+}
+
 function poseOf(state, id) {
   if (!state || typeof state !== 'object') return null;
   const body = state[id];

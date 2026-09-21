@@ -166,23 +166,31 @@ bug.
 
 ## Stretch: WebRTC
 
-`WebRtcTransport.connect({ signaling, role, roomId })`.
-`HttpPollingSignaling` talks to `api/signal.js`.
-`node scripts/signal-server.js` runs that relay locally.
+Duel's **Peer** tab is this path: labeled experimental, loopback one
+click away. Compare / Play never depend on it.
 
-Do not hang the landing demo on this path. If it is wired into a UI
-later, label it experimental and keep loopback one click away.
+`createPeerSession({ role, transport })` is a listen-server (host = p1,
+guest = p2). `WebRtcTransport.connect({ signaling, role, roomId })`
+opens an unordered unreliable data channel. `HttpPollingSignaling`
+talks to `api/signal.js`. `npm run signal` runs that relay locally.
+
+Signaling is not a game server — it only swaps SDP/ICE. The host peer
+*is* the authority, which is how you skip a global fleet: the sim sits
+next to one of the players.
+
+NAT traversal can still fail (no TURN in this repo). Time out, show the
+error, stay on loopback. Do not hang the landing demo on this path.
 
 ---
 
 ## Tests
 
 - `npm test` — `InputHistory`, `PredictionClient` + `AuthoritativeHost`,
-  `RemoteInterpolator`, `PredictedView` / `createLoopbackSession`,
-  `NetworkLink` / `rollDelivery`, `CorrectionSmoother`, `runProbe`,
-  Duel `simulate`.
+  `RemoteInterpolator`, `PredictedView` / `createLoopbackSession` /
+  `createPeerSession`, `NetworkLink` / `rollDelivery`,
+  `CorrectionSmoother`, `runProbe`, Duel `simulate`, signaling relay.
 - `node test/demo.e2e.mjs` — Playwright against `demo/index.html` and
-  `examples/minimal.html`.
+  `examples/minimal.html`. Does not require WebRTC to pass.
 
 ---
 

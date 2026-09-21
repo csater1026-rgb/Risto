@@ -13,7 +13,9 @@ flake on camera.
 
 - The video / landing demo runs on **loopback transport** (two simulated
   peers in one page, through the synthetic lag/loss injector). Do not
-  make the main demo depend on real WebRTC or a signaling server.
+  make Compare / Play depend on real WebRTC or a signaling server. Peer
+  mode is opt-in, labeled experimental, and must keep loopback one click
+  away.
 - `simulate(state, inputs, dt)` must stay **pure**. Prediction and
   reconciliation replay it.
 - `ShadowBody` is a first-class mechanic (where the host thinks you

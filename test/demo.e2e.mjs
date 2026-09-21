@@ -151,6 +151,13 @@ async function main() {
     `expected interpolator to blend under jitter, blendRate=${blendRate}`
   );
 
+  await page.locator('#modePeer').click();
+  const peerWarn = await page.locator('.peer-panel .warn').textContent();
+  assert(/Experimental/.test(peerWarn), `expected experimental peer warning, got "${peerWarn}"`);
+  await page.locator('#modeCompare').click();
+  const canvasAfterPeer = await page.locator('.lanes canvas').count();
+  assert(canvasAfterPeer === 2, `compare mode should still have 2 canvases after leaving peer, got ${canvasAfterPeer}`);
+
   assert(errors.length === 0, `page threw errors: ${errors.join('\n')}`);
 
   const exampleUrl = BASE_URL.replace(/demo\/index\.html$/, 'examples/minimal.html');

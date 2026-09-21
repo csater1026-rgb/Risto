@@ -111,6 +111,29 @@
   .play-wrap{display:none}
   body.mode-play .lanes{display:none}
   body.mode-play .play-wrap{display:block}
+  body.mode-peer .lanes{display:none}
+  body.mode-peer .play-wrap{display:block}
+  body.mode-peer .presets,
+  body.mode-peer .sliders{display:none}
+
+  .peer-panel{
+    display:none;flex-wrap:wrap;gap:8px 12px;align-items:center;
+    background:linear-gradient(180deg,#171308,var(--panel));
+    border:1px dashed #3a3218;border-radius:14px;padding:10px 12px;margin:0 0 14px;
+  }
+  body.mode-peer .peer-panel{display:flex}
+  .peer-panel .warn{color:var(--gold);font-size:12px;font-weight:650}
+  .peer-panel label{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--ink-faint)}
+  .peer-panel input[type=text]{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    border-radius:8px;padding:6px 8px;font-family:var(--mono);font-size:12px;min-width:140px;
+  }
+  .peer-panel button{
+    appearance:none;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);
+    padding:6px 10px;border-radius:8px;font-size:12px;font-weight:650;cursor:pointer;
+  }
+  .peer-panel button:hover{border-color:var(--you);color:var(--you)}
+  #peerStatus{font-family:var(--mono);font-size:12px;color:var(--ink-dim)}
   .play-wrap .lane{max-width:920px;margin:0 auto}
 
   .keys{
@@ -198,6 +221,7 @@
     <div class="modes" role="tablist">
       <button id="modeCompare" class="on" type="button">Compare</button>
       <button id="modePlay" type="button">Play</button>
+      <button id="modePeer" type="button">Peer</button>
     </div>
     <div class="presets" id="presets">
       <button type="button" data-l="15" data-j="4" data-s="0">LAN</button>
@@ -229,6 +253,21 @@
     </div>
   </div>
   <p class="hint" id="hint">WASD/arrows to move, Space to dash. Same input, same fake network. The hollow disc is your shadow — the world hits that, not your pixels.</p>
+
+  <div class="peer-panel" id="peerPanel">
+    <span class="warn">Experimental · NAT can fail · loopback is Compare / Play</span>
+    <label>Signal
+      <input id="peerSignal" type="text" value="http://localhost:8787" spellcheck="false" />
+    </label>
+    <label>Room
+      <input id="peerRoom" type="text" maxlength="8" spellcheck="false" />
+    </label>
+    <button type="button" id="peerHost">Host</button>
+    <button type="button" id="peerJoin">Join</button>
+    <button type="button" id="peerCopy">Copy join link</button>
+    <button type="button" id="peerLeave">Leave</button>
+    <span id="peerStatus">idle — run <code>node scripts/signal-server.js</code></span>
+  </div>
 
   <div class="lab" id="lab" aria-label="Netcode lab">
     <div><div class="k">Network</div><div class="v" id="labNet">—</div></div>
@@ -265,8 +304,8 @@
   <div class="play-wrap">
     <div class="lane predictive">
       <header class="lh">
-        <h3>Duel</h3>
-        <p class="sub">Play the shadow. Dash into a clash near the lip to throw them out.</p>
+        <h3 id="playTitle">Duel</h3>
+        <p class="sub" id="playSub">Play the shadow. Dash into a clash near the lip to throw them out.</p>
       </header>
       <canvas id="canvasPlay" width="560" height="400"></canvas>
       <div class="stat" id="statPlay">—</div>
@@ -284,7 +323,7 @@
     </article>
     <article>
       <h3>3. Interpolate everyone else</h3>
-      <p>You can't predict the bot's next input, so Risto renders it slightly in the past and blends between snapshots. Motion stays smooth under jitter and loss.</p>
+      <p>You can't predict the opponent's next input, so Risto renders them slightly in the past and blends between snapshots. Motion stays smooth under jitter and loss.</p>
     </article>
     <article>
       <h3>4. Shadow Body</h3>
@@ -295,7 +334,7 @@
   <div class="pro" id="pro">
     <div>
       <h3>Risto Pro</h3>
-      <p>Gold ring, private-room stretch goals, and the real WebRTC transport (same engine, actual peers). Checkout is a RevenueCat Web Billing stub until you drop in a key.</p>
+      <p>Gold ring, listed private-room stretch goals. Checkout is a RevenueCat Web Billing stub until you drop in a key. Peer mode on this page is free and experimental — NAT can fail.</p>
     </div>
     <button class="btn" id="unlockPro" type="button">Unlock Pro</button>
   </div>
@@ -303,7 +342,7 @@
   <footer>
     Open source under MIT. Transport is a swappable send/onReceive —
     this page uses the loopback injector so a demo never depends on NAT.
-    Attach recipe: <a href="../examples/minimal.html">examples/minimal.html</a>.
+    Peer mode is opt-in experimental WebRTC. Attach recipe: <a href="../examples/minimal.html">examples/minimal.html</a>.
   </footer>
 </div>
 
@@ -317,7 +356,6 @@
     </p>
     <ul>
       <li>Gold ring skin on this demo</li>
-      <li>WebRTC peer-to-peer path (stretch, same engine code)</li>
       <li>Private rooms, more arenas — listed, not shipped</li>
     </ul>
     <div class="row">
@@ -330,10 +368,18 @@
 <script type="module">
   import { Lane } from './lane.js';
   import { createRenderer } from './render.js';
-  import { rollDelivery, ProbeSampler } from '../src/index.js';
+  import { simulate, createInitialState } from './simulate.js';
+  import {
+    rollDelivery,
+    ProbeSampler,
+    createPeerSession,
+    WebRtcTransport,
+    HttpPollingSignaling,
+    lerpPose,
+  } from '../src/index.js';
 
-  const laneNaive = new Lane({ predictive: false });
-  const laneRisto = new Lane({ predictive: true });
+  let laneNaive = new Lane({ predictive: false });
+  let laneRisto = new Lane({ predictive: true });
   const drawNaive = createRenderer(document.getElementById('canvasNaive'));
   const drawRisto = createRenderer(document.getElementById('canvasRisto'));
   const drawPlay = createRenderer(document.getElementById('canvasPlay'));
@@ -398,14 +444,117 @@
 
   document.getElementById('modeCompare').addEventListener('click', () => setMode('compare'));
   document.getElementById('modePlay').addEventListener('click', () => setMode('play'));
+  document.getElementById('modePeer').addEventListener('click', () => setMode('peer'));
+  let uiMode = 'compare';
+  let peerLive = null;
+  const peerSignal = document.getElementById('peerSignal');
+  const peerRoom = document.getElementById('peerRoom');
+  const peerStatus = document.getElementById('peerStatus');
+  peerRoom.value = newRoomCode();
+
+  function setPeerStatus(text) {
+    peerStatus.textContent = text;
+  }
+
   function setMode(mode) {
-    document.body.classList.toggle('mode-play', mode === 'play');
+    if (mode !== 'peer') stopPeer();
+    uiMode = mode;
+    document.body.classList.toggle('mode-play', mode === 'play' || mode === 'peer');
+    document.body.classList.toggle('mode-peer', mode === 'peer');
     document.getElementById('modeCompare').classList.toggle('on', mode === 'compare');
     document.getElementById('modePlay').classList.toggle('on', mode === 'play');
+    document.getElementById('modePeer').classList.toggle('on', mode === 'peer');
+    document.getElementById('playTitle').textContent = mode === 'peer' ? 'Duel · peer' : 'Duel';
+    document.getElementById('playSub').textContent =
+      mode === 'peer'
+        ? 'Experimental listen-server. You are the blue disc. NAT can fail — Compare/Play is loopback.'
+        : 'Play the shadow. Dash into a clash near the lip to throw them out.';
     document.getElementById('hint').textContent =
-      mode === 'play'
-        ? 'WASD/arrows to move, Space to dash. The hollow disc is your shadow — knockouts are decided there.'
-        : 'WASD/arrows to move, Space to dash. Same input, same fake network. The hollow disc is your shadow — the world hits that, not your pixels.';
+      mode === 'peer'
+        ? 'Experimental WebRTC. Host on one machine, Join on the other with the same room. Signaling is a tiny local relay, not a game server. Loopback is one click away.'
+        : mode === 'play'
+          ? 'WASD/arrows to move, Space to dash. The hollow disc is your shadow — knockouts are decided there.'
+          : 'WASD/arrows to move, Space to dash. Same input, same fake network. The hollow disc is your shadow — the world hits that, not your pixels.';
+  }
+
+  function newRoomCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i = 0; i < 4; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+    return s;
+  }
+
+  async function startPeer(role) {
+    await stopPeer();
+    const roomId = (peerRoom.value.trim() || newRoomCode()).toUpperCase();
+    peerRoom.value = roomId;
+    const url = peerSignal.value.trim() || 'http://localhost:8787';
+    setPeerStatus(`connecting as ${role}…`);
+    const signaling = new HttpPollingSignaling({ url, roomId });
+    const transport = new WebRtcTransport();
+    try {
+      await transport.connect({ signaling, role, roomId });
+    } catch (err) {
+      signaling.stop();
+      transport.close();
+      setPeerStatus(
+        `${err.message || 'WebRTC failed'}. Is signaling up? node scripts/signal-server.js — or go back to Play.`,
+      );
+      return;
+    }
+    const session = createPeerSession({
+      simulate,
+      initialState: createInitialState(),
+      role,
+      transport,
+    });
+    peerLive = { signaling, transport, session, role };
+    setPeerStatus(`connected · ${role} (you are ${session.playerId}) · room ${roomId}`);
+    drawPlay.reset();
+  }
+
+  async function stopPeer() {
+    if (!peerLive) return;
+    try {
+      peerLive.signaling.stop();
+    } catch { /* ignore */ }
+    try {
+      peerLive.transport.close();
+    } catch { /* ignore */ }
+    peerLive = null;
+    setPeerStatus('idle — run node scripts/signal-server.js');
+    laneNaive = new Lane({ predictive: false });
+    laneRisto = new Lane({ predictive: true });
+    applyNetworkConditions();
+    drawPlay.reset();
+  }
+
+  document.getElementById('peerHost').addEventListener('click', () => startPeer('host'));
+  document.getElementById('peerJoin').addEventListener('click', () => startPeer('client'));
+  document.getElementById('peerLeave').addEventListener('click', () => stopPeer());
+  document.getElementById('peerCopy').addEventListener('click', async () => {
+    const roomId = (peerRoom.value.trim() || newRoomCode()).toUpperCase();
+    peerRoom.value = roomId;
+    const url = new URL(location.href);
+    url.searchParams.set('peer', '1');
+    url.searchParams.set('room', roomId);
+    url.searchParams.set('role', 'client');
+    url.searchParams.set('signal', peerSignal.value.trim() || 'http://localhost:8787');
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setPeerStatus(`join link copied · room ${roomId}`);
+    } catch {
+      setPeerStatus(url.toString());
+    }
+  });
+
+  const boot = new URLSearchParams(location.search);
+  if (boot.get('signal')) peerSignal.value = boot.get('signal');
+  if (boot.get('room')) peerRoom.value = boot.get('room').toUpperCase();
+  if (boot.get('peer') === '1') {
+    setMode('peer');
+    const role = boot.get('role') === 'host' ? 'host' : 'client';
+    startPeer(role);
   }
 
   let dashHold = 0;
@@ -447,6 +596,44 @@
     lastTime = now;
     if (dashHold > 0) dashHold = Math.max(0, dashHold - dt);
     const input = readInput();
+    if (uiMode === 'peer') {
+      if (peerLive?.session) {
+        const session = peerLive.session;
+        session.applyLocalInput(input, dt);
+        session.step(dt);
+        const sampled = session.sample(Date.now(), dt / 1000, lerpPose);
+        const peerState = session.renderState(sampled);
+        drawPlay.draw(peerState, {
+          now,
+          pro,
+          showShadow,
+          localId: session.playerId,
+          opponentTag: 'THEM',
+        });
+        const rtt = Math.round(session.rttMs);
+        const gap = peerState.shadowGap ? Math.round(peerState.shadowGap) : 0;
+        statPlay.textContent =
+          `${session.role} · rtt ${rtt || '—'} ms · ${sampled.pending} pending · shadow ${gap} px · ${sampled.interpStatus}`;
+        probe.record(session.telemetry(dt, peerState.shadowGap ?? 0));
+        if (now - lastLab > 250) {
+          lastLab = now;
+          lastReport = probe.report({
+            latencyMs: Math.round(session.rttMs / 2),
+            jitterMs: 0,
+            lossRate: 0,
+            transport: 'webrtc',
+          });
+          paintLab(lastReport);
+        }
+        window.__ristoDebugState = { naive: null, risto: peerState, lab: lastReport, peer: session.role };
+      } else {
+        drawPlay.draw(createInitialState(), { now, pro, showShadow: false, opponentTag: 'THEM' });
+        statPlay.textContent = 'Host or Join a room. Signaling is not a game server.';
+      }
+      requestAnimationFrame(frame);
+      return;
+    }
+
     const c = conditions();
     // One roll per direction per frame, shared by both lanes.
     const toHost = rollDelivery(c);

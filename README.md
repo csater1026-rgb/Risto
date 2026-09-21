@@ -75,6 +75,7 @@ import {
   ShadowBody,
   PredictedView,        // client bundle: predict + interpolate + shadow
   createLoopbackSession, // host + PredictedView + fake network
+  createPeerSession,    // listen-server over any send/onReceive transport
   createLoopbackLink,   // in-page fake network (start here)
   WebRtcTransport,      // later: real peer
   ProbeSampler,         // live lab meters in your debug HUD
@@ -107,8 +108,8 @@ function frame(dt, input, now) {
 }
 ```
 
-When you swap loopback for WebRTC, keep `PredictedView` and drop the
-session helper — `ingest(snapshot)` already stamps remotes on arrival.
+When you swap loopback for WebRTC, use `createPeerSession({ role, transport })`
+with a `WebRtcTransport`. Remotes are still stamped on arrival.
 
 ### 2. Host peer (or dedicated server)
 
@@ -273,8 +274,8 @@ const { toClient, toHost } = createLoopbackLink({
 ```
 
 A real transport (e.g. a WebRTC data channel) implements the same
-`send` / `onReceive` shape, so swapping one for the other doesn't touch any
-of the netcode logic above it.
+`send` / `onReceive` shape. `createPeerSession({ role, transport })`
+is the listen-server wiring: host ticks, guest predicts.
 
 ## One lab report for game devs
 
@@ -306,10 +307,20 @@ the left, Risto on the right, with your **Shadow Body** drawn as a hollow
 disc. Space dashes. A hard clash near the lip throws the outer disc out.
 Play mode is the predicted lane full-width.
 
-The page uses loopback transport on purpose. Real WebRTC is implemented
-(`WebRtcTransport` + `api/signal.js`) but is a stretch goal; NAT
-traversal can fail, and a demo that flakes on camera is worse than no
-demo. See `RISTO.md`.
+The page uses loopback transport on purpose for Compare / Play. **Peer**
+is an opt-in experimental listen-server over WebRTC (same `simulate`,
+host is p1 in one tab, guest is p2 in another). NAT can fail; loopback
+is one click away.
+
+```bash
+npx --yes serve -l 8123   # or: python3 -m http.server 8123
+npm run signal            # http://localhost:8787 — not a game server
+# open http://localhost:8123/demo/index.html → Peer → Host
+# other machine: Peer → same room → Join  (or use Copy join link)
+```
+
+`createPeerSession` is the attach recipe for any `send` / `onReceive`
+transport, including `WebRtcTransport`.
 
 ## Development
 
