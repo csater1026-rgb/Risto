@@ -178,11 +178,23 @@
     laneNaive.update(dt, input);
     laneRisto.update(dt, input);
 
-    draw(ctxNaive, laneNaive.getRenderState(now));
-    draw(ctxRisto, laneRisto.getRenderState(now));
+    // Snapshots are stamped with Date.now() (AuthoritativeHost), not the
+    // rAF callback's performance.now()-based `now` — those are different
+    // clocks (performance.now() is relative to this page's own navigation
+    // start) and must not be mixed when sampling the RemoteInterpolator.
+    const wallClockNow = Date.now();
+    const naiveState = laneNaive.getRenderState(wallClockNow);
+    const ristoState = laneRisto.getRenderState(wallClockNow);
+    draw(ctxNaive, naiveState);
+    draw(ctxRisto, ristoState);
 
     statNaive.textContent = 'no local prediction';
     statRisto.textContent = `${laneRisto.pendingInputCount} input(s) awaiting host ack`;
+
+    // Test-only hook: exposes the exact render state so the headless e2e
+    // check can verify the opponent is actually animating (interpolating)
+    // rather than reading pixels off the canvas. Not part of the public API.
+    window.__ristoDebugState = { naive: naiveState, risto: ristoState };
 
     requestAnimationFrame(frame);
   }

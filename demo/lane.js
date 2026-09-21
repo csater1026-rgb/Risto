@@ -74,7 +74,12 @@ export class Lane {
     }
   }
 
-  /** @returns {{ p1: {x:number,y:number}, p2: {x:number,y:number} }} */
+  /**
+   * @param {number} now must be Date.now()-based — the same clock
+   *   AuthoritativeHost stamps its snapshots with. Do not pass a
+   *   performance.now() value here; see RemoteInterpolator's class docs.
+   * @returns {{ p1: {x:number,y:number}, p2: {x:number,y:number} }}
+   */
   getRenderState(now) {
     if (this.predictive) {
       const clientState = this.client.getState();
