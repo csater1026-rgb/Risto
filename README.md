@@ -185,6 +185,37 @@ node test/demo.e2e.mjs   # headless Playwright check against a running
   gets silently discarded forever. Call `client.reset(state)` once your own
   reconnect logic knows a new host session has begun.
 
+### Architecture: host-authoritative, not peer-to-peer
+
+Ristro is deliberately **host-authoritative**: one designated peer (or a
+real server) runs `simulate()` as the single source of truth, and every
+other client predicts only its *own* input, reconciling against that
+host's snapshots. This is a real design choice with a real tradeoff worth
+naming explicitly, not an oversight:
+
+- It's simpler to reason about and implement correctly — one source of
+  truth, deterministic replay only needs to cover the local player's own
+  unacknowledged inputs, and `PredictionClient`/`AuthoritativeHost` map
+  cleanly onto it.
+- The cost: every interaction round-trips through wherever the host is,
+  even when two players are physically near each other and don't need
+  that detour.
+
+The alternative is **peer-to-peer rollback netcode** (GGPO-style, common
+in fighting games): no host at all, every peer predicts *every* player's
+input and rolls back to resimulate when a real one disagrees. Round trip
+then depends only on the distance between the two actual players. It's a
+different architecture, not a drop-in option here — it requires
+`simulate()` to be bit-for-bit deterministic across every peer (this
+library does not verify or enforce that), and every peer must predict
+everyone, not just themselves. Worth knowing about, not something Ristro
+currently implements.
+
+Neither approach changes the one hard constraint underneath both: signal
+propagation delay is bounded by physical distance and the medium it
+travels through, and no netcode architecture — host-authoritative or
+peer-to-peer — reduces that. Both only change *what* has to wait for it.
+
 ## License
 
 MIT

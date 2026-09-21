@@ -93,6 +93,10 @@
   .explain ol{margin:12px 0 0; padding-left:20px; font-size:13px; color:var(--ink-dim)}
   .explain ol li{margin-bottom:10px}
   .explain ol li b{color:var(--ink)}
+  .explain .floor{
+    margin:14px 0 0; padding:11px 13px; font-size:12.5px; color:var(--ink-dim);
+    background:rgba(0,0,0,.18); border:1px solid var(--line); border-radius:9px;
+  }
 
   .pro{
     margin-top:18px; padding:17px 19px;
@@ -180,7 +184,17 @@
         <li><b>Dead reckoning.</b> When no new snapshot has arrived in time, extrapolate the remote entity a short distance forward using its last known velocity instead of freezing — trades an occasional visible correction for less perceived staleness.</li>
         <li><b>Lag compensation (server-side rewind).</b> For direct interactions between players — not modeled in this Duel demo — the host can momentarily rewind its own state to what the acting player actually saw, so high-ping players' actions register fairly.</li>
         <li><b>Move the host closer.</b> The cheapest win is often not code at all: regional/edge hosting reduces the actual one-way latency everything above is compensating for in the first place.</li>
+        <li><b>Peer-to-peer rollback netcode.</b> Ristro's design here is host-authoritative: every input round-trips through one designated host, even when two players don't actually need that detour. GGPO-style rollback netcode (common in fighting games) removes the host entirely — every peer predicts <i>every</i> player's input, not just its own, and rolls back a few frames to resimulate when a real input disagrees. Round trip then depends only on the distance between the two actual players, not on where a third host happens to sit. This is a different architecture, not a tweak: it needs every peer's simulation to be bit-for-bit deterministic, with no single source of truth to fall back on.</li>
       </ol>
+      <p class="floor">
+        None of this beats physics, and it's worth saying plainly: propagation
+        delay — signal travel time set by distance and medium — is a hard
+        floor nothing above removes, only hides or reduces. The only real way
+        to lower it is a physically faster path (undersea hollow-core fiber,
+        line-of-sight links) — expensive infrastructure, not code. That's the
+        same reason high-frequency trading firms spend fortunes on cable
+        routes between exchanges rather than on cleverer algorithms.
+      </p>
     </details>
   </div>
 
