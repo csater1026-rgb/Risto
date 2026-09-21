@@ -5,8 +5,9 @@ import { RING } from './simulate.js';
  * with identical host inputs produce the same opponent — the split you
  * see is the netcode, not a different fight.
  *
- * Circles the ring and periodically cuts in to shove the player toward
- * the nearest lip. Always moving, so interpolation has something to do.
+ * Orbits first so interpolation has motion and the player can feel
+ * prediction. Short charge windows later, aimed through the player
+ * toward the nearest lip.
  */
 export function thinkBot(state) {
   const me = state.p2;
@@ -17,22 +18,21 @@ export function thinkBot(state) {
   const toYouY = you.y - me.y;
   const dist = Math.hypot(toYouX, toYouY) || 1;
 
-  const orbit = t * 1.35;
-  const radius = RING.r * 0.46;
+  const orbit = t * 1.15;
+  const radius = RING.r * 0.52;
   const orbitX = RING.cx + Math.cos(orbit) * radius;
   const orbitY = RING.cy + Math.sin(orbit) * radius;
 
-  // Charge window: ~45% of a 2.4s cycle. Enough hits to look like a fight,
-  // not so many that the player never gets a turn.
-  const charge = Math.sin(t * 0.9 + 0.4) > 0.1;
+  const cycle = t % 5.5;
+  const charge = t > 2.2 && cycle > 4.15 && cycle < 4.85;
 
   let tx;
   let ty;
-  if (charge && dist < RING.r * 1.4) {
+  if (charge && dist < RING.r * 1.5) {
     const outX = you.x - RING.cx;
     const outY = you.y - RING.cy;
-    tx = toYouX / dist * 1.1 + outX * 0.012;
-    ty = toYouY / dist * 1.1 + outY * 0.012;
+    tx = toYouX / dist + outX * 0.01;
+    ty = toYouY / dist + outY * 0.01;
   } else {
     tx = orbitX - me.x;
     ty = orbitY - me.y;

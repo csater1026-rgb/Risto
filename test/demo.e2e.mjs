@@ -3,12 +3,22 @@
 //   node test/demo.e2e.mjs
 // against a local static server (e.g. `python3 -m http.server 8123`).
 import { chromium } from 'playwright';
+import { existsSync } from 'node:fs';
 
 const BASE_URL = process.env.RISTO_DEMO_URL ?? 'http://localhost:8123/demo/index.html';
+const CHROME_CANDIDATES = [
+  process.env.PLAYWRIGHT_CHROMIUM,
+  '/opt/pw-browsers/chromium',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/google-chrome',
+].filter(Boolean);
 
 async function main() {
+  const executablePath = CHROME_CANDIDATES.find((p) => existsSync(p));
   const browser = await chromium.launch({
-    executablePath: '/opt/pw-browsers/chromium',
+    executablePath,
+    headless: true,
+    args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
   const page = await browser.newPage();
   // Only real thrown JS exceptions fail the check — incidental console
@@ -17,7 +27,10 @@ async function main() {
   page.on('pageerror', (err) => errors.push(String(err)));
 
   await page.goto(BASE_URL, { waitUntil: 'load' });
-  await page.waitForTimeout(300);
+  await page.waitForFunction(
+    () => window.__ristoDebugState?.risto?.phase === 'play',
+    { timeout: 4000 },
+  );
 
   // 1. Page loaded with no JS errors and both canvases present.
   const canvasCount = await page.locator('.lanes canvas').count();
@@ -33,19 +46,33 @@ async function main() {
   const latencyLabel = await page.locator('#latencyOut').textContent();
   assert(latencyLabel.includes('350'), `latency slider didn't apply: ${latencyLabel}`);
 
-  // 3. Hold the right-arrow key and sample the Risto (predictive) canvas's
-  // underlying render state indirectly by reading pixel data before/after —
-  // simpler and more robust: read the lane's pendingInputCount stat, which
-  // only moves if local prediction is actually running ahead of host acks.
+  // 3. Hold right. Prediction must queue unacked inputs AND the predicted
+  // disc must lead the naive disc — that's the product claim.
   await page.keyboard.down('ArrowRight');
-  await page.waitForTimeout(120); // a few animation frames, well under the 350ms host RTT
+  await page.waitForTimeout(180);
   const statRisto = await page.locator('#statRisto').textContent();
+  const lead = await page.evaluate(() => {
+    const { naive, risto } = window.__ristoDebugState;
+    return {
+      naiveX: naive.p1.x,
+      ristoX: risto.p1.x,
+      phase: risto.phase,
+    };
+  });
   await page.keyboard.up('ArrowRight');
 
   const pending = parseInt(statRisto, 10);
   assert(
     Number.isInteger(pending) && pending > 0,
     `expected Risto lane to have unacknowledged predicted inputs while host RTT is high, got: "${statRisto}"`
+  );
+  assert(
+    lead.phase === 'play',
+    `expected to sample during play, got phase=${lead.phase}`
+  );
+  assert(
+    lead.ristoX > lead.naiveX + 8,
+    `expected predicted p1 to lead naive p1 under 350ms latency; naive=${lead.naiveX.toFixed(1)} risto=${lead.ristoX.toFixed(1)}`
   );
 
   // 4. Drop latency/loss back to near zero and confirm the backlog actually
@@ -68,27 +95,26 @@ async function main() {
 
   // 5. Verify the interpolated opponent (p2) in the Risto lane moves
   // *smoothly* under jitter (which can reorder RemoteInterpolator.push()
-  // calls), not just "moves at all". A naive "did the position change over
-  // 300ms" check is too weak here: even a frozen/broken interpolator (e.g.
-  // the clock-mismatch bug, where sample() always returned the oldest
-  // buffered snapshot) still advances in discrete jumps as the buffer's
-  // trim logic ages old entries out — so net displacement over a long
-  // window can look nonzero either way. The real signature of correct
-  // interpolation is that *every short step* is small and bounded (true
-  // blending between two nearby snapshots); the signature of the bug is
-  // long stretches of ~0 movement punctuated by an occasional big jump
-  // (holding one stale snapshot, then snapping to the next one aged into
-  // range). So sample frequently and check the *largest single step*,
-  // not just start-vs-end displacement.
+  // calls), not just "moves at all". Sample only while the round is in
+  // play so a knockout reset cannot look like an interpolation jump.
   await page.locator('#jitter').fill('60');
   await page.locator('#jitter').dispatchEvent('input');
-  await page.waitForTimeout(200); // let a few snapshots flow through first
+  await page.waitForFunction(
+    () => window.__ristoDebugState?.risto?.phase === 'play',
+    { timeout: 4000 },
+  );
+  await page.waitForTimeout(200);
 
   const samples = [];
-  for (let i = 0; i < 12; i++) {
-    samples.push(await page.evaluate(() => window.__ristoDebugState.risto.p2));
+  for (let i = 0; i < 16 && samples.length < 12; i++) {
+    const snap = await page.evaluate(() => {
+      const s = window.__ristoDebugState.risto;
+      return { phase: s.phase, p2: s.p2 };
+    });
+    if (snap.phase === 'play') samples.push(snap.p2);
     await page.waitForTimeout(25);
   }
+  assert(samples.length >= 8, `not enough in-play interpolation samples (${samples.length})`);
 
   let maxStep = 0;
   let totalMoved = 0;
@@ -98,13 +124,11 @@ async function main() {
     totalMoved += step;
   }
 
-  // The bot's own top speed (demo/simulate.js: 140px amplitude / ~900ms
-  // half-period on x, 110px / ~600ms on y) bounds true smooth per-25ms-step
-  // movement at roughly 6px worst case; a discontinuous jump from the bug
-  // is many multiples of that. 15px gives real headroom above the smooth
-  // bound while staying well below a jump.
+  // MAX_SPEED is 280 px/s → ~7px in 25ms. Interpolation should stay
+  // under that plus a little impulse slack. A broken interpolator snaps
+  // by tens of pixels.
   assert(
-    maxStep < 15,
+    maxStep < 18,
     `expected smooth interpolation (small, bounded per-step movement); saw a ${maxStep.toFixed(2)}px single-step jump — samples: ${JSON.stringify(samples)}`
   );
   assert(

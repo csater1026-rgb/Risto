@@ -4,6 +4,7 @@ import { simulate, createInitialState, RING, RADIUS, isOut } from '../demo/simul
 
 test('held input moves p1 and leaves a frozen p2 still', () => {
   const start = createInitialState();
+  start.phase = 'play';
   const next = simulate(start, { p1: { dx: 1, dy: 0 } }, 100);
   assert.ok(next.p1.x > start.p1.x);
   assert.equal(next.p2.x, start.p2.x);
@@ -13,6 +14,7 @@ test('held input moves p1 and leaves a frozen p2 still', () => {
 test('present zero input still integrates (friction), missing input freezes', () => {
   const moving = {
     ...createInitialState(),
+    phase: 'play',
     p1: { x: RING.cx, y: RING.cy, vx: 100, vy: 0 },
     p2: { x: RING.cx + 80, y: RING.cy, vx: 100, vy: 0 },
   };
@@ -24,6 +26,7 @@ test('present zero input still integrates (friction), missing input freezes', ()
 
 test('overlapping discs separate and pick up opposing velocity', () => {
   const start = createInitialState();
+  start.phase = 'play';
   start.p1 = { x: RING.cx - 10, y: RING.cy, vx: 80, vy: 0 };
   start.p2 = { x: RING.cx + 10, y: RING.cy, vx: -80, vy: 0 };
   const next = simulate(start, { p1: { dx: 0, dy: 0 }, p2: { dx: 0, dy: 0 } }, 16);
@@ -35,6 +38,7 @@ test('overlapping discs separate and pick up opposing velocity', () => {
 
 test('leaving the ring awards a point and enters ko', () => {
   const start = createInitialState();
+  start.phase = 'play';
   start.p2 = { x: RING.cx + RING.r + 20, y: RING.cy, vx: 0, vy: 0 };
   const next = simulate(start, { p1: { dx: 0, dy: 0 }, p2: { dx: 0, dy: 0 } }, 16);
   assert.equal(next.phase, 'ko');
@@ -46,6 +50,7 @@ test('leaving the ring awards a point and enters ko', () => {
 
 test('ko timer resets bodies into countdown, then play', () => {
   let state = createInitialState();
+  state.phase = 'play';
   state.p1 = { x: RING.cx - RING.r - 30, y: RING.cy, vx: 0, vy: 0 };
   state = simulate(state, { p1: { dx: 0, dy: 0 }, p2: { dx: 0, dy: 0 } }, 16);
   assert.equal(state.phase, 'ko');
