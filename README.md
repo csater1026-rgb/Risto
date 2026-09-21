@@ -39,6 +39,125 @@ npm install risto
 Or drop `dist/risto.global.js` on a page with a `<script>` tag — it exposes
 a `Risto` global with the same exports.
 
+## Attach your game
+
+Risto is not a game engine. You keep Phaser, Three.js, Canvas, whatever.
+You attach at **one function**:
+
+```js
+function simulate(state, inputs, dt) {
+  // YOUR rules. Pure: do not mutate `state`, return a new one.
+  // `inputs.p1`, `inputs.p2`, … are whatever you sent (stick, buttons, dash).
+  // `dt` is milliseconds.
+  return nextState;
+}
+```
+
+That same function runs on the host (truth) and on each client
+(prediction + replay). If it isn’t pure, reconciliation will desync.
+
+### 1. Drop the library in
+
+```bash
+npm install risto
+```
+
+```js
+import {
+  PredictionClient,
+  AuthoritativeHost,
+  RemoteInterpolator,
+  CorrectionSmoother,
+  ShadowBody,
+  createLoopbackLink,   // in-page fake network (start here)
+  WebRtcTransport,      // later: real peer
+  ProbeSampler,         // live lab meters in your debug HUD
+  runProbe,             // CI: one report, no canvas
+} from 'risto';
+```
+
+### 2. Host peer (or dedicated server)
+
+Whoever is authority constructs an `AuthoritativeHost` with **your**
+`simulate` and **your** `initialState`. On a fixed tick (e.g. 20 Hz):
+
+```js
+host.receiveInput(playerId, seq, input);
+const snapshot = host.tick(50);
+transport.send(snapshot);
+```
+
+### 3. Each player’s client
+
+```js
+const client = new PredictionClient({ simulate, playerId: 'p1', initialState });
+const remote = new RemoteInterpolator({ delayMs: 100 });
+const smoother = new CorrectionSmoother();
+const shadow = new ShadowBody();
+
+function onLocalInput(input, dt) {
+  const { seq, state } = client.applyLocalInput(input, dt);
+  transport.send({ seq, input });
+  drawYou(smoother.apply(state.p1, dt / 1000));
+}
+
+transport.onReceive((snapshot) => {
+  const prev = client.getState().p1;
+  client.reconcile(snapshot);
+  smoother.note(prev, client.getState().p1);
+  shadow.push(snapshot.state.p1, snapshot.timestamp); // hollow disc
+  remote.push(snapshot.state.p2, snapshot.timestamp); // everyone else
+});
+
+function frame(now) {
+  const you = smoother.apply(client.getState().p1, 1 / 60);
+  const them = remote.sample(Date.now(), lerp);
+  const hostYou = shadow.sample(); // where the world actually hits you
+  render({ you, them, hostYou });
+}
+```
+
+Your renderer only reads positions. Risto never touches the canvas.
+
+### 4. Transport is a plug
+
+Start with loopback (two players in one tab, sliders for lag). When you
+want a friend on another device, swap in `WebRtcTransport` or your own
+socket — anything with `send` / `onReceive`. The sim does not change.
+
+```js
+const { toHost, toClient } = createLoopbackLink({ latencyMs: 150, jitterMs: 30, lossRate: 0.05 });
+toHost.onReceive((msg) => host.receiveInput('p1', msg.seq, msg.input));
+toClient.onReceive((snapshot) => client.reconcile(snapshot));
+```
+
+### 5. Lab / CI (optional)
+
+In your game loop, `probe.record({ frameMs, hostTickMs, pending, shadowGap, … })`
+and show `probe.report(conditions)` on a debug HUD — same six cells as Duel.
+
+In tests, don’t boot the game at all:
+
+```js
+import { runProbe, mulberry32 } from 'risto';
+
+test('4G still feels ok', () => {
+  const report = runProbe({
+    simulate,              // the same function production uses
+    initialState,
+    seconds: 4,
+    conditions: { latencyMs: 150, jitterMs: 30, lossRate: 0.05 },
+    inputAt: () => ({ dx: 1, dy: 0 }),
+    rng: mulberry32(1),
+  });
+  assert.ok(report.feel.score > 60);
+  assert.ok(report.server.onBudget);
+});
+```
+
+Duel (`demo/`) is that recipe with two discs. Copy `demo/lane.js` if you
+want a working host+client+link in one file, then replace `simulate`.
+
 ## The three pieces
 
 **1. Predict locally, the instant input happens.**
