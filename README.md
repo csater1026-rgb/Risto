@@ -1,4 +1,4 @@
-<img src="demo/assets/logo.webp" alt="Ristro" width="120" />
+<img src="demo/assets/logo.png" alt="Ristro" width="120" />
 
 # Ristro
 
